@@ -1,4 +1,4 @@
-# 📘 MLE_HW_KevinLi
+# 📘 MLE_HW_KevinLi ✨✨
 
 Hi, I'm Kevin!  
 Welcome to my journey through the **Machine Learning Engineering in GenAI** course. I'm a beginner in Python and have some basic HTML/CSS knowledge - afterall, I come from a graphic design background. This repo is where I’ll document my weekly homework, projects, and notes as I learn and grow through this 10-week program.
