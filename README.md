@@ -22,7 +22,10 @@ This repo contains my homework and notes for each week of the MLE course. Each w
 ---
 
 ### Week 2: ⚙️ LLM Training Phases and Data Requirements
-- 📝 *[Record notes and code snippets]*
+- 📝 **Project 1.1:** Tesseract OCR
+  - 📌 *Note:* I tried best practices by cleaning the input image to black and white, and cleaned up grains. However, the output was actually worse than the uncleaned version. This may be because I'm cleaning it wrong, or because of limitations of tesseract itself.
+- 📝 **Project Bonus.1:** HTML scraping with trafilatura and extracting with tesseract
+  - 📌 *Note:* Trafilatura is already capable of converting html and optimizing its content to JSON files. Not sure where tesseract comes into play.
 
 ---
 
