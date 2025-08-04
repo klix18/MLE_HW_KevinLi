@@ -1,0 +1,1417 @@
+2508.00751v1 [cs.IR] 1 Aug 2025
+
+arX1Vv
+
+Harnessing the Power of Interleaving and Counterfactual
+Evaluation for Airbnb Search Ranking
+
+Qing Zhang Alex Deng* Michelle Du
+Airbnb Microsoft Airbnb
+San Francisco, CA, USA Seattle, WA, USA San Francisco, CA, USA
+qing.zhang@airbnb.com alexdeng@live.com michelle.du@airbnb.com
+Huiji Gao Liwei He Sanjeev Katariya
+Airbnb Airbnb Airbnb
+
+San Francisco, CA, USA
+huiji.gao@airbnb.com
+
+ABSTRACT
+
+Evaluation plays a crucial role in the development of ranking algo-
+rithms on search and recommender systems. It enables online plat-
+forms to create user-friendly features that drive commercial success
+in a steady and effective manner. The online environment is partic-
+ularly conducive to applying causal inference techniques, such as
+randomized controlled experiments (known as A/B test), which are
+often more challenging to implement in fields like medicine and
+public policy. However, businesses face unique challenges when it
+comes to effective A/B test. Specifically, achieving sufficient statis-
+tical power for conversion-based metrics can be time-consuming,
+especially for significant purchases like booking accommodations.
+While offline evaluations are quicker and more cost-effective, they
+often lack accuracy and are inadequate for selecting candidates for
+A/B test. To address these challenges, we developed interleaving
+and counterfactual evaluation methods to facilitate rapid online
+assessments for identifying the most promising candidates for A/B
+tests. Our approach not only increased the sensitivity of experi-
+ments by a factor of up to 100 (depending on the approach and
+metrics) compared to traditional A/B testing but also streamlined
+the experimental process. The practical insights gained from usage
+in production can also benefit organizations with similar interests.
+
+CCS CONCEPTS
+
+« Mathematics of computing — Hypothesis testing and con-
+fidence interval computation; - Applied computing — Elec-
+tronic commerce.
+
+KEYWORDS
+
+causal inference, interleaving, counterfactual evaluation, search
+ranking, recommendation
+
+“Work completed while employed by Airbnb
+
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for profit or commercial advantage and that copies bear this notice and the full citation
+on the first page. Copyrights for components of this work owned by others than the
+author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or
+republish, to post on servers or to redistribute to lists, requires prior specific permission
+and/or a fee. Request permissions from permissions@acm.org.
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+© 2025 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+ACM ISBN 979-8-4007-1454-2/2025/08...$15.00
+https://doi.org/10.1145/3711896.3737232
+
+Seattle, WA, USA
+liwei.he@airbnb.com
+
+San Francisco, CA, USA
+sanjeev.katariya@airbnb.com
+
+ACM Reference Format:
+
+Qing Zhang, Alex Deng, Michelle Du, Huiji Gao, Liwei He, and Sanjeev
+Katariya. 2025. Harnessing the Power of Interleaving and Counterfactual
+Evaluation for Airbnb Search Ranking. In Proceedings of the 31st ACM
+SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (KDD
+°25), August 3-7, 2025, Toronto, ON, Canada. ACM, New York, NY, USA,
+10 pages. https://doi.org/10.1145/3711896.3737232
+
+1 INTRODUCTION
+
+Web platforms extensively utilize data-driven approaches to refine
+their ranking algorithms for search or recommendation systems.
+By presenting users with different variations, we can measure the
+impact of changes based on user actions directly. A/B testing is
+a widely used method for this purpose. In a typical A/B testing
+scenario, visitors to a website are randomly assigned to either a
+control group or a treatment group. The control group is exposed
+to the baseline version of the website, which usually reflects the
+current live production environment, while the treatment group
+experiences the versions produced by the new, proposed algorithm.
+The effectiveness of the treatment is evaluated by comparing key
+business metrics, such as conversion rates, between the two groups.
+Additionally, a comprehensive set of debugging metrics, including
+funnel conversion rates, user engagement levels, and characteris-
+tics of the results, are analyzed to gain deeper insights into the
+behavior and performance of the ranking algorithms. A/B testing
+has become a cornerstone for fostering continuous innovations,
+playing a crucial role in their ability to adapt and improve [21].
+
+A significant volume of work has been dedicated to enhancing
+the effectiveness of A/B testing. Notably, [7] proposed leveraging
+pre-experiment data to reduce metric variance and improve sensi-
+tivity. This approach has been widely adopted across the industry,
+as seen in works such as [22, 33]. Additionally, in-experiment data
+has been utilized to develop surrogate metrics that aim to achieve
+high sensitivity and provide early readings on business metrics,
+which often experience delayed outcomes [5]. The extensive use of
+A/B testing in the industry has led to the accumulation of valuable
+practical lessons, which have been studied in depth [8, 19, 20].
+
+A/B testing alone, however, is often insufficient due to the long
+running times required for experiments on e-commerce platforms
+like Airbnb. There are three main reasons. First, users typically
+visit the site with a certain level of intent to make a purchase.
+Since Airbnb users generally travel only twice a year, the traffic
+
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+for experiments is significantly lower compared to search engines.
+Second, while conversion is usually the target metric, it takes time
+to realize. The higher the stakes, the longer the search journey;
+for instance, an Airbnb user might spend several days searching
+for accommodation that fits their preferences. In contrast, search
+engines receive immediate feedback from user clicks. Third, as
+the system matures, the effect size of each innovation tends to be
+small, which necessitates an even longer time to detect statistically
+significant changes [1].
+
+A logical question arises: why don’t we use offline evaluations
+to identify the most promising candidates for A/B testing? Indeed,
+offline evaluation is often employed as a preliminary step for model
+assessment. This process involves collecting search logs, which in-
+clude the results displayed and the corresponding user actions, and
+using them to evaluate the proposed ranker. While this approach is
+efficient and risk-free, it tends to lack accuracy. The primary reason
+is that the ranker we aim to evaluate only has the visibility of what
+has been shown by the logging ranker but not all the candidate
+items. To address this selection bias, techniques such as inverse
+propensity weighting (IPW) [26], based on importance sampling
+[13], have been proposed. However, these techniques often result in
+high variance, as noted by [10]. In addition, obtaining the propen-
+sity score (the probability of a result being displayed) is complicated
+due to system complexity [4].
+
+In addition, offline metrics are frequently disconnected from
+online business metrics. For example, the Normalized Discounted
+Cumulative Gain (NDCG) [15] is a standard offline metric, while
+conversion rate serves as the primary online metric. Often, these
+two metrics are inconsistent. Furthermore, offline evaluations can-
+not fully account for the user dynamics that occur when individuals
+interact with ranked lists.
+
+To bridge the gap between the two approaches, we seek a mid-
+dle step that is faster than A/B testing while being more accurate
+than offline evaluation. Interleaving experiments, first proposed in
+[16, 17], offer a potential solution. However, several open questions
+remain. Firstly, the interleaving methods developed in prior work
+primarily used clicks as user feedback, whereas our target metric
+is conversion, which is much sparser, as previously noted. Addi-
+tionally, we must consider scalability, as the method will be imple-
+mented in production and handle real traffic; thus, both complexity
+and latency need to remain within acceptable limits. Consequently,
+it is unclear whether the state-of-the-art interleaving mechanisms
+can be efficiently and effectively applied to ranking problems in
+e-commerce platforms like Airbnb.
+
+In this paper, we share our recent advances in enhancing the ex-
+perimentation velocity for Airbnb’s search ranking. We present our
+innovations in interleaving experiment design and the engineer-
+ing framework. Following this, we detail an online counterfactual
+evaluation approach that is more generalizable and addresses the
+limitations of interleaving. Both techniques are utilized for select-
+ing treatment candidates for A/B testing. These systems are used by
+engineers working on search ranking at Airbnb, and the validation
+of these techniques is based entirely on real-world usage, as op-
+posed to the dataset-based simulations commonly used in previous
+work. Our contributions are,
+
+Qing Zhang et al.
+
+e Competitive pair based interleaving that’s unbiased and
+highly efficient, and we observed 50X speedup improvement
+compared to A/B in production. The speedup is computed
+with traffic needed to achieve similar statistical power as
+A/B test.
+
+e Online counterfactual evaluation which further improved
+the sensitivity on top of interleaving and more generalizable.
+The metrics demonstrated up to 100X speedup compared to
+A/B.
+
+e Practical lessons from the usage in production that provides
+full picture of of the techniques.
+
+e Both interleaving and counterfactual evaluation approaches
+presented in the paper can be fairly easily generalized to
+other platforms.
+
+To the best of our knowledge, this is the first work where both ap-
+proaches have been implemented in production, evaluated side by
+side and used on a daily basis. The paper provides a comprehensive
+comparison, detailing both the advancements and limitations of
+each approach and an experimentation strategy with interleaving,
+counterfactual evaluation, and A/B test to improve overall exper-
+imentation velocity in practice, which will prove invaluable for
+businesses facing similar challenges.
+
+2 PRELIMINARIES
+2.1 Problem Definition
+
+First, we define the notations and formulate the evaluation prob-
+lem. We use z to denote the ranking algorithm (also referred to
+as the policy). Given a set of candidate listings with features X
+(which include listing attributes, past engagements, queries, and
+user history), the algorithm generates a ranked list represented as
+L ~ x(L|X). After presenting this list to the user, we observe the
+reward O ~ p(O|X,L), which can include events such as clicks and
+purchases. O can be an empty list when there is no user action for
+the L. The value of the policy z is defined as the expected reward
+V(a) = E(f(O) « 2(O|X)), where f maps rewards into numeric
+value. Given a proposed policy ; and a baseline policy 0, the
+evaluation problem involves designing an estimator for V(z) and
+using the difference tr = V(2,) — V(0) to assess the impact of
+policy 2; compared to policy 2.
+
+The intuition of comparison can be further developed with poten-
+tial outcome framework [14]. Formally, let W be the assignments,
+and each element wj; indicates the group that subject i belongs
+to, specifically control when w; = 0 and treatment when w; = 1.
+Also, let Y denote the outcome (reward), where Y;(0) represents the
+outcome when control is applied to instance i, and similarly Y;(1)
+treatment. For a moment, let’s assume we can observe outcomes
+from both groups then we can compute the impact Y;(1) — Y;(0)
+on each element, and get average treatment effect
+
+N
+r= = YH) ~ ¥(0) = FA) ~ FO) (1)
+i=1
+
+Therefore V(t) = Y(w) here. In common settings we cannot
+observe both Y;(0) and Y;(1) at the same time. For example a user
+is either exposed to the treatment or control policy, but not both.
+Thanks to the randomized controlled experiment, such as A/B test,
+
+
+Harnessing the Power of Interleaving and Counterfactual Evaluation for Airbnb Search Ranking
+
+the difference between the observed outcome 7 is unbiased for t
+[14],
+
+@ = pes — Yes (2)
+where superscript obs indicates that these are observed outcomes.
+¥OP5 = S-Di =o VPS, and similarly ¥?8 = Ke Diwan VP%S.
+
+Interleaving and counterfactual evaluation, on the other hand,
+connects with the original form Eq 1 by examining the Y;(1) — Y;(0).
+We will have more discussion in later sections.
+
+Percent delta relative to baseline is computed as following,
+
+MA = £/YO%S (3)
+
+In rest of the paper we omit the step of Eq 3 when discussing metrics
+for simplicity and assume it is always the final step.
+
+2.2 Design Principles
+
+When examining and designing the online evaluation techniques,
+we are guided by the following principles that were proposed and
+refined in previous work [1, 12, 17, 24],
+
+e Sensitivity. A primary objective of an evaluation approach
+is to achieve the desired statistical power with the minimal
+amount of data necessary.
+
+e Unbiasness. When a user randomly interact with ranked
+
+result, we should expect there is no preference according to
+
+the estimator.
+
+Fidelity. The estimator should align with the intuition when
+
+user operate on the original results.
+
+e Minimal user experience disruption. The user experience
+
+during the evaluation should mirror the experience that they
+
+would typically have when using the product under normal
+conditions.
+
+Acceptable complexity and scalability. The system is
+
+going to be integrated into a large-scale user-facing search
+
+framework, necessitating efficiency in both operation and
+maintenance.
+
+Generalizability. Given the dynamic nature of the search
+system and evolving business requirements, the evaluation
+methodology must be flexible and easily extendable.
+
+It is expected that an evaluation approach may perform well in some
+criteria while underperforming in others. Therefore, trade-offs have
+to be made based on the specific use case.
+
+3 > RELATED WORK
+
+3.1 Interleaving Experiments
+
+Interleaving is an online testing methodology first proposed in [16,
+17]. The central idea is to provide the same user with two variants
+that we want to compare (e.g., results from two rankers) and to
+infer their preferences based on the user actions, which indicate
+the quality difference between the two. The key components of
+this methodology include a merging algorithm to blend the two
+result lists and a credit assignment mechanism. The technique
+enables the assessment of ranker relevance through user events,
+such as clicks, without adding any overhead for the user. Moreover,
+it allows for a direct comparison of two rankers by the same user.
+This development is significant, as it marked a shift away from the
+traditional reliance on human annotators for Web search evaluation.
+
+KDD 25, August 3-7, 2025, Toronto, ON, Canada
+
+There are primarily three types of interleaving methods. The
+first type, Balanced Interleaving (BI), was introduced in [16, 17].
+This method ensures that the top k results in the merged result list I
+consistently include the top kg results from ranker A and ky results
+from ranker B, with kg and k, differing by no more than one [3]. As
+a result, the merged list evenly distributes impressions between the
+two rankers. For credit assignment, each click within I is attributed
+to both A and B, provided it appears in their respective lists and is
+above a certain position threshold. The ranker accumulating more
+clicks is deemed superior. However, as [3] points out, balanced
+interleaving can yield biased results when the two rank lists are
+almost identical, differing only by a slight shift or insertion. To
+address this bias, [1] developed an interleaving method that debiases
+BI by incorporating IPW for credit attribution. The process requires,
+for each ranker, computing the probability of receiving a click
+at each position in the merged list. Despite its effectiveness, the
+BI+IPW method poses complexities in credit attribution and less
+extensible compared to our approach.
+
+The second type of interleaving method is Team Drafting Inter-
+leaving (TD), as introduced in [25]. This method utilizes a merging
+algorithm that mimics the process of drafting in sports teams. It
+iterates through both ranked lists from top to bottom, selecting
+the highest-ranked available item to add to the combined list I.
+Each item in J is assigned to a "team," indicating its origin from
+either ranker. Preferences are determined by counting which "team"
+has gathered more clicks. This approach addresses the bias issue
+identified with BI. [3] suggested several refined schemes for credit
+assignment. Our work builds upon TD, offering more efficient credit
+computation and increased generalizability. [12] pointed out that
+TD potentially violates fidelity in certain cases, our practical ex-
+perience in production has not revealed any issue stemming from
+these cases. Moreover, our research into counterfactual evaluation
+indicates that such scenarios have a negligible effect on the overall
+evaluation. We will explore this topic in greater detail in Section 5.4.
+
+The third type of interleaving method, Probabilistic Interleaving
+(PI), was introduced in [11, 12] with the aim of improving upon BI
+and TD. Unlike BI and TD, where the merged list I is constructed
+from a fixed order of items from A and B, PI uses softmax functions
+s(A) and s(B) to transform these lists into probability distributions
+over documents, from which items are then sampled to create list
+I. The credit computation in PI considers all possible sequences
+of drafting that could result in the formation of list J. While PI is
+unbiased in its approach, it has the potential to significantly alter
+the user experience and introduces greater system complexity for
+production use.
+
+3.2 Interleaving in Practice
+
+There is limited literature on how interleaving is used in production.
+Most of the previous work are research projects ran on limited
+datasets, such as [11, 12]. There were experiments conducted in
+Microsoft and Yahoo!, such as [3] but consistency with A/B test
+were not discussed. The study most relevant to our work is [1]
+by Amazon, which uses BI as base algorithm and applied IPW to
+correct the bias, as mentioned earlier. It was evaluated by comparing
+the results with 10 A/B tests. Our approach is more efficient and
+we report our comparison with A/B with much larger corpus.
+
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+3.3. Counterfactual Evaluation
+
+When evaluating policy z, data collected from another policy 9 is
+often used. It is usually in the form of past search logs, leading to the
+terms “off-policy" and "offline evaluation" being used interchange-
+ably. Three categories of work have emerged in this field. The first
+category involves directly modeling (DM) the reward and using it
+to predict the outcome of the target policy for each search. This
+approach typically results in a low variance but high bias estimator
+[18].
+
+The second category is the model-free approach. As mentioned
+in Section 1, Inverse Propensity Weighting (IPW) method is pro-
+posed to correct the probability of events observed in historical
+data. For instance, if an item has a probability 2 of being shown ac-
+cording to the target policy, the outcome is weighted by a where
+mo represents the probability of being shown according to the log-
+ging policy [13, 26]. While IPW is unbiased, it suffers from high
+variance. A series of techniques have been developed to address
+the challenges in IPW based approaches, including Clipped Inverse
+Propensity Score [29] and Self-Normalized IPS estimator [30].
+
+In the third category, the Doubly Robust Estimator [9] combines
+the DM and IPW estimators. This approach is both unbiased and
+consistent while exhibiting lower variance than IPS. Furthermore,
+several variations have been developed based on the doubly robust
+estimator [23, 27, 28, 32].
+
+The aforementioned work primarily focuses on multi-arm bandit
+evaluation, which cannot be directly applied to search ranking due
+to the large action space. However, in the online counterfactual
+evaluation discussed in this paper, we incorporate elements of IPW
+and reward estimation.
+
+Recent development has used counterfactual result to decom-
+pose the target metric and reduce the variance [6]. Specifically
+counterfactual results are utilized to categorize the events into high
+and low signal-to-noise ratio portions and it enables the weighting
+between the two portions. Our work is built on top of the approach.
+
+4 INTERLEAVING WITH COMPETITIVE PAIR
+
+As outlined in Section 1, our existing experimentation process com-
+prises two steps. Initially, experimenters utilize offline evaluation
+with historical data during the early stages of iteration. This ap-
+proach is fast and cost-effective, requiring only 1-2 hours for Airbnb
+cases, though it lacks accuracy. Subsequently, the promising can-
+didates identified in the first step proceed to A/B testing, which
+is constrained by limited bandwidth and requires weeks to com-
+plete. This bottleneck could be alleviated by introducing a middle
+stage that that is much faster than A/B and more accurate than
+offline evaluation. Interleaving, known for its high sensitivity [3],
+emerges as a viable option for the stage. We tackle the online eval-
+uation challenges 1) low frequency transaction and 2) conversion
+as target metric by efficient team draft design and innovative credit
+attribution.
+
+4.1 Methodology
+
+In Section 3.1, we examined three variations of interleaving: BI, TD,
+and PI. The complexity of these methods, particularly in terms of
+their merging algorithms and credit attribution processes, can be
+ordered from most to least complex as PI > BI > TD. Given that
+
+Qing Zhang et al.
+
+our system is intended to operate in a production environment and
+cater to all search ranking experimentations, we chose TD for its
+efficiency and extensibility.
+
+4.1.1. Competitive Pair and Credit Attribution. In the previous work
+[25], the team drafting process involves teams taking turns to select
+the next item not yet included in the merged list I. A coin flip
+at each turn determines which team picks first. We design team
+drafting with a notion of competitive pair and the coin flip only
+happens once at the beginning procedure. In every turn, we draft
+the next available item from each team. If different, they form a
+competitive pair, and are added I with the order determined by the
+coin flip. The team assignment is logged accordingly. If the items
+are identical, the item is added to I without being assigned to any
+team. This procedure is detailed in Algorithm 1. The design is highly
+efficient for serving and preference calculation. To illustrate, let’s
+walk through an example with two ranked lists C = {a, b,c, d, e}
+and T = {b,c, a, f,g}, assuming isC first = true. The first few steps
+of team drafting process would unfold as follows:
+
+e Draft a from C and b from T. As the two items are differ-
+ent, they form a competitive pair and are placed in I, as
+[a°, b" | (line 7 - 9). The super script indicates the team as-
+signment.
+
+e The next available items are c from C and c from T. Since
+they are the same, c is added to IJ without a team assignment.
+(line 13 - 14)
+
+e This process continues until the end condition is met.
+
+Following this procedure, the output would be I = {a°, b" , c, d©, fT}.
+Our design guarantees that each team has an equal opportunity
+
+to be selected first, ensuring that rankers C and T have identical
+
+chances of displaying their listings in any given position. The ap-
+proach effectively eliminates position bias in our measurements.
+
+To maintain a consistent user experience, we construct list I with a
+
+length equal to the minimum of [, and 1;, the lengths of the lists
+
+generated by rankers C and T, respectively. In our production envi-
+ronment, /, and J; are equal except in rare cases, as it is from the
+
+same user search request.
+
+4.1.2 Preference. Team preference is determined by counting the
+victories of each competitive pair and then aggregating these re-
+sults to the desired level of analysis. In our case, we consider the
+individual user as the unit of analysis (although search requests
+could also serve this purpose). For each user i, the outcome is iden-
+tified based on which team—C or T—has more wins. We define
+Y;(w) = wins(w), where w can either be team C or team T and the
+function wins(.) simply counts the number of wins for the corre-
+sponding team. The preference measure, 7;, is then calculated as
+the difference in wins between team T and team C, expressed as
+tj = Y\(T) — Yj(C). This method provides a clear and quantifiable
+metric for team preference at the user level.
+
+Tpref = S(t > 0) - Do tc < 0)) (4)
+
+The p-value is computed by proportional test on }); 1(7; > 0)
+and )); 1(7; < 0), which are the number of subjects who prefers T
+and C respectively.
+
+
+Harnessing the Power of Interleaving and Counterfactual Evaluation for Airbnb Search Ranking
+
+Algorithm 1: Competitive Pair Team Drafting
+
+Input: ranked list C and T, coin filp result isC first
+Output: Interleaved list I
+
+Ie, ly <— len(C), len(T)
+
+ly — min(Ic, lt)
+
+ke, kt <— 0,0
+
+4Il¢O
+
+5 while ko! = —1&k;! = —1&ke < [c¢&k; < 1p&len(1) < 1; do
+
+ray
+
+N
+
+w
+
+6 if A[ke]! = B[k;] then
+
+7 if isCfirst then
+
+8 T—1UC[ke]©
+
+9 | Te IUT[k;|!
+
+10 else
+
+u IC IUT [ky]?
+
+2 | Te 1UClke]©
+
+13 else
+
+14 | P=1u Clke]
+
+15 ke <— nextAvailable(C, ke, 1)
+16 | kt <— nextAvailable(T, kt, I)
+
+17 return J
+
+Using competitive pairs allows for a direct comparison between
+two items from the two rankers, with each pair acting as the basis
+for attributing credit. This approach minimizes noise in determining
+preferences, especially when the event is sparse, such as conversion.
+It has demonstrated high sensitivity in our validation process.
+
+4.1.3 Unbiasness. If users interact with I by clicking randomly,
+there is no team preference based on the credit attribution scheme.
+To illustrate it, we use competitive pairs as the base unit to derive
+the user preference. A user who take actions randomly will click
+first and second item in the pair with probability P(C = 1|r = 1) and
+P(C = 1|r = 2), where r is rank of the listing and C = 1 if clicked,
+and 0 otherwise. The expectation of the listing from A (or B) get
+clicked is P(C = 1|r = 1)P(r = 1)+P(C = 1|r = 2)P(r = 2). As each
+ranker has the equal chance of being ranked at the first according
+to team draft algorithm, so we have P(r = 1) = P(r = 2) = 0.5. By
+aggregating all pairs, we will get that ranker A and B will have an
+equal number of expected wins.
+
+Careful readers may question the unbiasness when only the first
+item from the last competitive pair is returned, given our control
+over result length by l; in Algorithm 1. Since each team has an equal
+chance of having this lone item, no bias is introduced, as confirmed
+by the data quality checks detailed in the following section and
+Section 6.2.3.
+
+4.1.4 Data Quality Monitoring. In addition to assessing the busi-
+ness impact of the treatment ranker, our credit assignment algo-
+rithm serves an important role in data quality checks, which are
+essential for accurate experimentation. Specifically, the algorithm
+can be applied to evaluate the distribution of impressions and the
+frequency with which each team appears first in a competitive pair.
+We anticipate neutral outcomes since each team should receive an
+equal number of impressions, and there should be a 50% chance for
+either team to appear first in the competitive pair. The methodology
+
+KDD 25, August 3-7, 2025, Toronto, ON, Canada
+
+enables us to verify the unbiased nature of each experiment. Should
+these quality metrics fail to meet our expectations, the results of
+the experiment would be deemed invalid, indicating that the team
+drafting algorithm did not perform as expected. To our knowledge,
+this approach has not been previously proposed.
+
+4.2 Architecture Design
+
+In order to support the interleaving, we designed two-layer exper-
+iment delivery scheme. The first layer divides the traffic, which
+are users in our case, into regular A/B test and interleaving. The
+users assigned to A/B portion will be exposed to A/B tests as usual.
+For whose who are assigned to the interleaving portion, the sec-
+ond layer maps them to the corresponding interleaving experiment
+(Figure 1). Within the interleaving framework, each experiment
+slot is referred to as a “lane,” highlighting the fact that all necessary
+traffic for interleaving is contained within this slot, unlike in the
+A/B setup, which requires a control arm in addition. When the
+
+Control ranker
+
+rayey Interleaving delivery io eS interleaving Final results
+85 ea” Ne-A000
+
+82  gesiment ranker
+Sp
+
+b
+b
+b
+b
+
+Figure 1: Interleaving delivery system. Twos layers of ran-
+domization are used. The first layer decides which user is
+subject to interleaving and the second assigns the user to the
+specific interleaving experiment.
+
+search system receives a query from a user assigned to interleaving,
+a parallel call component initiates control and treatment search
+requests simultaneously. These requests proceed through the entire
+search stack, producing individual search responses. Subsequently,
+the team drafting algorithm is employed to merge these responses
+into a final result list, which is then presented to the user.
+
+4.3 Interleaving in Production
+
+The interleaving system has been integrated into Airbnb’s search
+ranking experiment process and has been utilized to conduct over
+a hundred experiments. Due to its high sensitivity, interleaving is
+conducted with a small fraction of traffic and over a much shorter
+duration than A/B testing. The computational complexity, including
+latency, is well within the threshold required by the search system.
+
+5 COUNTERFACTUAL EVALUATION
+
+While interleaving is recognized for its high sensitivity, there are
+specific scenarios where its application is limited. First, when a
+ranker extensively uses set level optimization, such as improving
+diversity of the results, the interleaving would break the assumption.
+Second, when search list is also used for generating other results on
+the website, such as map view at Airbnb, there is risk to disrupt user
+experience. Lastly, it is not straightforward to implement semanti-
+cally meaningful metric for continuous value based outcome such
+as revenue. A promising approach to overcome these limitations
+while preserving the benefits of search-level pairwise comparison is
+to avoid result blending altogether. This can be achieved by creating
+counterfactual results within the A/B testing paradigm, thereby
+
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+maintaining the same user experience as outside of evaluation while
+still allowing for effective comparison and evaluation.
+
+Next, let’s delve deeper into the rationale behind the approach.
+As previously mentioned, in an A/B test, participants are divided
+into two groups. For those who are in control group, they will
+always see results from control ranker, and similarly treatment
+group user will see the treatment ranker results. Then we compare
+the conversion rate of treatment vs control group. Interleaving
+takes a nuanced approach to this comparison. For each search
+query, it generates results from both the control and treatment
+rankers, merges these results, and then displays the combined list
+to the user. Counterfactual evaluation serves as a hybrid of A/B
+testing and interleaving. It leverages the concept of generating
+paired results for each search, similar to interleaving, yet evaluates
+these results using metrics computed in a manner akin to A/B
+testing. The relationship between the three types of evaluations are
+
+illustrated in Figure 2.
+AJB Test
+
+Cc T Cc T
+
+& =
+
+Interleaving Counterfactual Evaluation
+
+» ° »
+cl
+Cc
+T
+C=control, T=treatment, CF=counterfactual T as CF Cas CF
+
+Figure 2: Counterfactual evaluation intuition. It can be un-
+derstood as combining the characteristics of A/B tests and
+interleaving. It uses the results from both ranker for metrics
+computation, but doesn’t need to blend them together.
+
+In counterfactual evaluation, there is notion of shown and coun-
+terfactual results. For each search, we generate results L, and L;
+based on both control and treatment ranker. If L- shown to the user,
+then L; is the counterfactual result, and the roles reverse if L; is
+shown instead. For the ease of description, we use w denote the
+shown ranker and 1 — w as counterfactual.
+
+For each user who are subject to the experiment, we flip a coin
+to decide which result to show. The randomization is seeded by
+user ID and experiment ID. Such design ensures the consistent user
+experience and minimize the carryover effect when running back
+to back experiments.
+
+We present online counterfactual evaluation below, which is a
+direct extension of interleaving. It leverages parallel calls similar to
+interleaving to obtain the results from both control and treatment.
+Subsequently we utilize the counterfactual results to analyze the
+shown results, as opposite to interleaving which blends these two
+sets of results. This approach allows us to derive metrics that are
+more sensitive than those typically used in A/B testing. In [6], direct
+decomposition on target metrics based on counterfactual result
+is proposed. With it as foundation, we present a novel approach
+that’s based on relative position and estimated outcome in the
+counterfactual, which is proved to be more sensitive.
+
+5.1 Direct Decomposition Based Estimators
+
+First we describe the Direct Decomposition approach [6]. Let Y(w)
+denote the outcome of each group, where w is the assignments, and
+
+Qing Zhang et al.
+
+its value 0 and 1 represent control and treatment respectively. For
+any given item associated with an event (for example, a booking),
+its ranking position is denoted as rj(w) when subjected to the
+treatment w. We can categorize the outcome into two types,
+
+YS?" (w) = 1(ri(w) <= k&rj(1- w) <=k :
+&lri(w) — ri(1 — w)| <= @) °
+
+veTF w) = 1(|ri(w) - 711 — w)| > @) (6)
+
+Where k and @ are hyperparameters encoding the mapping of
+ranking difference and true conversion impact. We simply use the
+values that’s discussed in [6], which are k = 4 and @ = 2. The direct
+decomposition based estimator is,
+
+Tdecomp = ‘dif f + 0 * Tsim (7)
+
+Tgif f ANd Tsim are the average treatment effect aggregated on user
+level by following Equation 1. As detailed in [6], tyi¢¢ has much
+smaller variance than Tsjm, and significant variance reduction can
+be achieved from the re-weighting. We use 8 = 0.2 in production.
+
+5.2 Estimated Reward Based Estimators
+
+The direct decomposition method categorizes target metrics based
+on the ranked positions generated by both the shown and counter-
+factual rankers. This approach utilizes estimators that are depen-
+dent on both the absolute and the relative positions of the item in
+question. Building on this, we introduce a novel type of estimators
+that focuses solely on the difference in positions.
+
+Define f : Z* — Rasa booking probability model. For a search
+i that has booking event, let Y;(w) = 1, then Y¥;(1 — w) = f(ri(1 -
+w))/f(ri(w)), and the gain between shown and counterfactual is
+
+Yi(w) — ¥(1- w) = 1- fri — w))/f(ri(w)) (8)
+
+In our implementation, we chose to use exponential function for f,
+with y as decay factor, f(r) = y~”. It is based on the observation
+that the lower the listing is ranked, the less likely that the user is
+going to interact with it.
+
+We also incorporate the notion of similar ranking proposed in
+direct decomposition, specifically when |rj(w) —ri(1-w)| <= a we
+consider the item is ranked at similar position between the shown
+and counterfactual. Formally, we compute the gain as
+
+gi = 1 — yx (aw) — 1 w) |= 220) (9)
+
+Based on win/lose status, we have a pair of estimators
+
+° r"(w), loss (w) = gi, 0, if ri(1 — w) — ri(w) — a > 0 (If
+shown ranker w ranks better, it gets g; as the gain at winning
+position)
+
+er" (w), loss (w) = 0,g;, if ri(w) — ri. — w) — a > 0 (If
+counterfactual ranker 1 — w ranks better, shown ranker gets
+gi as the gain at losing position)
+
+When |rj(w) — rj(1 — w)| is within @, item rankings are deemed
+similar, so g = 0 accordingly. Regarding y, a smaller value corre-
+sponds to a faster decay of attention curve and results in larger
+incremental gain. The estimator doesn’t use the absolute position,
+but simply the difference. We count difference of overall wins as
+
+
+Harnessing the Power of Interleaving and Counterfactual Evaluation for Airbnb Search Ranking
+
+gain estimator,
+1 . .
+Tg = wo U(r)" (w = 1) > 0) * 7)""(w = 1)
+
+-»} 1(r}""" (w =0) >0)* 7" (w =0))
+
+We also designed win-loss estimator, which is to count for each
+treatment, the difference of the event that’s in winning position
+
+(10)
+
+and losing position.
+
+Twin-loss = sen (w = 1) _ 7!088 (wy = 1))-
+ee (11)
+Soren w =0)- 7f°88 (Ww =0)))
+
+We aggregate the metrics across the users.
+
+5.3. OEC (Overall Evaluation Criteria) Metric
+
+We use a combination of direct decomposition and estimated re-
+ward based metrics to form the OEC metric (main metric) with
+the purpose of combining the potential benefit of both estimators.
+Specifically, we define
+
+Toec = B1 * Tdecomp + fo * Tq (12)
+
+We currently simply assign equal weights, with (1 = f2 = 0.5.
+
+5.4 Connection with Interleaving
+
+In [12], TD interleaving was pointed out to lack fidelity as well
+as sensitivity when there is a shift or insertion between two lists.
+For example, with C = {a,b,c,d} and T = {b,c,d,a}, then I =
+{a°, b' c,d} (C first), or I = {b?,a°,c,d} (T first). If the user
+booked listing c, we do not infer any preference as it is assigned to
+neither team. However, if we look at the original list, T is the better
+ranker because it ranks c higher than C. As we’ve seen in coun-
+terfactual evaluation discussed earlier, shift-by-one is considered
+no gain when we set equal zone threshold a > 0. In the validation
+Section 6.3.2, we show that a = 2 works better than even a = 1 (we
+did not collect data for a = 0), which supports the conclusion from
+interleaving that C and T is a tie if the booked item is c.
+
+The findings of counterfactual evaluation deepened our under-
+standing of the relationship between fidelity and sensitivity in
+interleaving. The fidelity violation actually doesn’t impact TD’s
+sensitivity.
+
+5.5 Event Attribution
+
+Until now, our discussion of the event has been somewhat abstract.
+In this section, we aim to clarify how event is attributed. The click
+event serves as the most straightforward example, establishing
+a direct link between the search result and the user’s action of
+clicking. However, our primary interest lies in conversion; therefore,
+booking is the key event we focus on. The search journey of an
+Airbnb user often spans multiple sessions, meaning a listing that
+gets booked can appear in more than one searches. Insights from
+previous research on Airbnb’s ranking system [31] suggest that
+a user’s decision to book a listing is influenced by every instance
+the listing appears during their search journey, not merely the
+final one. Consequently, for both interleaving and counterfactual
+evaluation, we attribute the booking event to all occurrences where
+
+KDD 25, August 3-7, 2025, Toronto, ON, Canada
+
+the listing was presented to the user during the experiment period,
+acknowledging the compound effect of repeated exposure on the
+booking decision.
+
+6 VALIDATION AND ANALYSIS
+
+For both interleaving and counterfactual evaluations, we gather
+corresponding A/B test results, when available, to serve as ground
+truth for validation. Note that often times what eventually tested in
+A/B is different from interleaving/counterfactual evaluation, as the
+experimenter would do final adjustments based on the evaluation
+results. We only picked the cases with no or minor adjustment for
+validation.
+
+Our aim is to achieve readings that are not only consistent with
+A/B test results but also demonstrate higher sensitivity. To assess
+the consistency between the proposed evaluation methods and
+A/B test outcomes, we focus on the correlation coefficient between
+point estimates from both evaluation approaches. To this end, we
+compile a validation corpus comprising two lists of point estimates:
+one from our proposed evaluation method, denoted as M£, and the
+other from A/B test results, denoted as M4/8_ For each ranker i,
+there exists a corresponding point estimate in both lists, obtained
+from the proposed evaluation method and the A/B test, respec-
+tively. The correlation coefficient between these two sets of point
+estimates is calculated using standard methods [2], providing a
+quantitative measure of the consistency between our proposed
+evaluation techniques and traditional A/B testing,
+
+_ Cou(ME, M4/8)
+
+OyEO MA/B
+
+corr (13)
+Where Cov(ME, MA/B)y is the covariance between M® and M4/8.
+Oye and oy,a/e are variance within each result list.
+
+6.1 Baselines
+
+In our study, we conducted a comparison of our methodologies
+against the two most relevant contemporary approaches in the
+field. Firstly, for the interleaving method, we benchmarked our
+speed improvements against the findings reported by [1]. Like
+us, [1] evaluated their interleaving approach in the context of its
+performance relative to traditional A/B testing. Secondly, for the
+counterfactual evaluation method, we compared our approach to
+[6], because the work in is also aimed at search ranking evaluation,
+making it a directly comparable study to our own. Through these
+comparisons, we aim to highlight the advancements our approaches
+
+bring to the field.
+
+6.2 Interleaving
+
+6.2.1 Consistency with A/B. We collected 29 interleaving - A/B test
+pairs, and the point estimates of interleaving and A/B test on our
+target conversion metric is plotted in Figure 3. Overall interleaving
+and A/B are directionally aligned 82% of the time. The correlation
+coefficient is 0.6.
+
+Through the usage, interleaving proved to be highly sensitive,
+as we observed about 50X speedup from A/B. We had a test ranker
+whose logic was to pick a random listing in the result list and
+put it to the top. The A/B test took weeks to conclude and the
+interleaving can detect the negative conversion impact using one
+
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+A/B Test
+
+Interleaving
+Figure 3: Interleaving and A/B Test point estimates. Axis ticks
+are omitted.
+
+day’s data on a fraction of traffic. The BI based interleaving from
+[1] reported 60X speedup based on a corpus size of 10. We consider
+the results are comparable and our approach is much more efficient
+computationally.
+
+6.2.2 Case Study. We are particularly interested in the inconsistent
+pairs. Our cases suggested a limitation of interleaving when the set
+level optimization is involved. For example, there was a treatment
+ranker that optimizes another objective other than conversion. The
+aim was to remain neutral in terms of conversion while improving
+the secondary objective. Initially, listings were sorted according
+to their booking probability. The ranker then rearranged some of
+these listings to better align with the secondary objective. When
+users were directly presented with this re-ranked list, they were
+likely to book listings based on the estimated trade-off between the
+primary and secondary objectives. However, the scenario changed
+when we interleaved these treatment results with control results.
+Users tended to select listings with a higher booking probability
+from the control group as they looked more attractive when placed
+side by side with treatment listings in competitive pair, leading to
+the treatment ranker’s underperformance. This discrepancy was
+evident as we observed a significant negative impact in the inter-
+leaving results, whereas the conversion remained neutral in the
+A/B test.
+
+6.2.3. Unbiasness Validation. As discussed in Section 4.1.4, thanks
+to the extensibility of competitive pair based TD, we are able to
+compute data quality metrics in the same way as conversion. They
+provide the validation on unbiasness for each interleaving experi-
+ment and Table 1 demonstrates the results from a past experiment.
+We expect no preference between two teams, which is confirmed
+by the metrics.
+
+Table 1: Unbiasness validation
+
+Metric A pval
+listings shown 0.00% 0.91
+shown first -0.01% 0.85
+shown reciprocal rank -0.02% 0.85
+listings found 0.00% 0.95
+
+6.3 Counterfactual Evaluation
+
+Similar to Interleaving, we collected 30 online counterfactual ex-
+periments whose treatments were later tested in A/B to evaluate
+the consistency and study the effect of hyperparameters.
+
+Qing Zhang et al.
+
+6.3.1 Consistency with A/B. The main metric Tec point estimate,
+which is plotted in Figure 4, has correlation coefficient 0.65 with
+A/B. Therefore overall the consistency matches the interleaving.
+
+A/B Test
+
+Counterfactual Evaluation
+Figure 4: Online counterfactual evaluation and A/B point
+estimates. Axis ticks are omitted.
+
+We show individual metrics point estimate correlation with A/B
+tests in Table 2. tg performs the best. ty; ¢¢ is much higher correla-
+tion than Tsim, which is consistent with findings in [6]. Tyin—Joss
+is between the tg and tgif f.
+
+Table 2: Metrics point estimate correlations with A/B test
+
+Metric Corr with A/B
+Tg 0.66
+Twin—loss 0.58
+Tdif f 0.55
+Tsim -0.29
+
+We studied the experiments in which the counterfactual evalua-
+tion didn’t work well and they are mainly due to shared real time
+user signals. For each search, as shown and counterfactual results
+are derived from the same user, the user related features are identi-
+cal for ranker C and T. When two rankers have drastically different
+capability of utilizing such features, the stronger one would utilize
+the engagement earned by the weaker ranker and gain an unfair
+advantage. Therefore we may want to discount the trustworthiness
+when the control and treatment ranker pair falls into such case.
+
+6.3.2 Effect of Hyperparameters. In reward based approach dis-
+cussed in Section 5.2, there are two hyperparmeters. The first one
+is the position decay factor y, quantifying how fast user’s atten-
+tion decrease along with the ranked position. We compared the t,
+and A/B correlation in respect to y, and the results are similar. For
+y = 0.9 and y = 0.95, the correlation coefficients are 0.644 and 0.648
+respectively.
+
+The second hyperparameter we examine is ranked position sim-
+ilarity threshold a, and our observations, as detailed in Table 3,
+indicate that setting a = 2 yields better correlations. This finding
+suggests that minor differences in relative position do not effec-
+tively differentiate ranking quality, regardless of the listing’s overall
+rank.
+
+Table 3: Metric variations correlation with A/B (y = 0.9)
+
+Metric a=1 a=2
+
+Tq 0.64 0.66
+T 0.58 0.60
+
+win-loss
+
+
+Harnessing the Power of Interleaving and Counterfactual Evaluation for Airbnb Search Ranking
+
+6.3.3 Sensitivity. We observed significant speed up compared to
+A/B. To achieve our target minimal detectable effect, the counterfac-
+tual evaluation requires much less traffic. We observed around 15X
+speed up for Toec, 23X for Twin—Joss- The most significant speed up
+is from tg, whose speedup is around 100X. The findings support
+our hypothesis that by adding additional knowledge from the coun-
+terfactual result of the same search, we can measure the impact
+with much less traffic.
+
+6.4 Interactions and Carryover Effects
+
+The risk of interaction between different evaluations is minimized
+through our experiment delivery strategy, which is outlined in Sec-
+tion 4.2. The majority of search traffic is allocated to A/B testing,
+while the remainder is designated for interleaving or counterfactual
+evaluation methods. Within this smaller segment, we further divide
+the traffic into distinct lanes, with each experiment being assigned
+its own lane. This structured approach ensures that each evaluation
+method operates within its own controlled environment, signifi-
+cantly reducing the potential for cross-experiment interference.
+
+The carryover effect refers to the influence of a previous experi-
+ment on the current one when they run back-to-back. Our approach
+minimizes this effect through randomization design. Let us consider
+an assignment group Gj, where i € {C, T} represents the control or
+treatment groups from the previous experiment, and let u denote a
+user. In the case of interleaving, the carryover effect would occur if
+Vu € Gj, the condition isC first is consistently true or false. How-
+ever, this is avoided because randomization occurs at the search
+level - each search flips a coin to decide which ranker goes first in
+team drafting. It was further validated through experiments that
+the carryover effect wasn’t observed.
+
+For counterfactual evaluation, we employ randomization based
+on user ID and experiment ID. The latter ensures that the assign-
+ment for the current experiment is independent of the assignment
+for the previous experiment. Additionally, we have analyzed back-
+to-back experiments and found no evidence of carryover effects.
+
+7 DISCUSSIONS
+
+7.1 Implementation Choice
+
+Interleaving and counterfactual evaluation presents a promising
+direction of evaluation in ranking. The central idea is to have the
+visibility of the ranked lists from both ranker 7; and zo. For inter-
+leaving, the two lists are combined and shown to the user, so the
+speedup comes from the comparison in each competitive pair. The
+counterfactual evaluation does not interfere with what is going to
+be shown to the user, and simply uses the counterfactual results to
+create more sensitive reward estimators.
+
+Interleaving and counterfactual evaluation metrics exhibit simi-
+lar prediction power to the A/B tests, so generally speaking they
+both are well-suited for pre-A/B test online evaluations. Interleav-
+ing, with straightforward credit computation, has shown higher
+sensitivity compared to a subset of counterfactual evaluation met-
+rics, which is a clear advantage.
+
+On the other hand, counterfactual evaluation demonstrates greater
+robustness for rankers with strong set level optimization. In use
+cases like we discussed in the Section 6.2 about re-ranking for
+optimizing secondary objective in Airbnb search, counterfactual
+
+KDD 25, August 3-7, 2025, Toronto, ON, Canada
+
+evaluation would not suffer from the bias according to later experi-
+ments of similar nature, as user will always see the full results from
+control or treatment.
+
+Therefore the choice of the technology is depending on the use
+cases, as well as the experiment bandwidth availability.
+
+7.2 Generalization
+
+Both interleaving and counterfactual evaluation presented in the
+paper can be fairly easily applied to other businesses. They can
+be well applied to the scenarios when traffic (users) and the user
+action event are abundant, such as engagement-targeted (e.g. click
+through rate) optimization on search and recommendation. They
+would, in particular, show strength when traffic and/or events are
+limited, for instance, e-commerce platforms where the conversion
+is the target metric. Traditional A/B testing in such an environment
+demands prolonged periods, ranging from weeks to months, to
+gather sufficient data for reliable statistical power. Conversely, the
+methods we present require significantly less traffic and a shorter
+duration to yield meaningful results. We provide further guidelines
+on the implementation in the Appendix A.
+
+8 CONCLUSION AND FUTURE WORK
+
+The paper presented our innovation in speed up Airbnb search
+ranking experimentation. Our version of interleaving is efficient
+and highly sensitive, and we extended it to develop online counter-
+factual evaluation which addresses the limitations of interleaving
+and more generalizable. Both approaches are proved to be effective
+online evaluation technique for treatment candidate selection for
+A/B test based on the large scaled usage at Airbnb. The techniques
+can be easily adopted by other online platforms.
+
+Since implementation of these systems, we conducted hundreds
+of experiments for which we observed an increase in capacity to
+test new ideas and generally higher success rates in A/B testing.
+Furthermore, we leverage this framework for conducting model
+studies, including ablation tests and initial explorations for new
+projects.
+
+For future directions, we aim to improve the accuracy of pre-
+dicting outcomes from counterfactual results by incorporating data
+collected during the experiment itself. In our current approach in
+estimated reward based estimator, we rely on assumptions about
+outcomes associated with the counterfactual ranker. However, a
+more precise prediction model can be developed once data from the
+ongoing experiment, or on-policy data, is accessible. By analyzing
+user feedback from this data, we can refine our predictions, thereby
+enhancing the overall sensitivity of our evaluation method.
+
+REFERENCES
+
+1] Nan Bi, Pablo Castells, Daniel Gilbert, Slava Galperin, Patrick Tardif, and Sachin
+Ahuja. 2022. Debiased balanced interleaving at Amazon Search. In Proceedings of
+the 31st ACM International Conference on Information & Knowledge Management.
+2913-2922.
+
+2] George Casella and Roger Berger. 2001. Statistical inference, Second Edition.
+Wadsworth Group.
+
+3] Olivier Chapelle, Thorsten Joachims, Filip Radlinski, and Yisong Yue. 2012. Large-
+scale validation and analysis of interleaved search evaluation. ACM Transactions
+on Information Systems (TOIS) 30, 1 (2012), 1-41.
+
+4] Minmin Chen, Alex Beutel, Paul Covington, Sagar Jain, Francois Belletti, and
+Ed H Chi. 2019. Top-k off-policy correction for a REINFORCE recommender
+system. In Proceedings of the Twelfth ACM International Conference on Web Search
+and Data Mining. 456-464.
+
+
+
+KDD ’25, August 3-7, 2025, Toronto, ON, Canada
+
+[10
+
+[11
+
+[12
+
+[13
+
+[14
+
+[15
+
+[16
+
+[17
+
+[18
+
+[19
+
+[20
+
+[21
+
+[22
+
+[23
+
+[24
+
+[25
+
+[26
+
+(27
+
+[28
+
+Alex Deng, Michelle Du, Anna Matlin, and Qing Zhang. 2023. Variance Reduction
+Using In-Experiment Data: Efficient and Targeted Online Measurement for Sparse
+and Delayed Outcomes. In Proceedings of the 29th ACM SIGKDD Conference on
+Knowledge Discovery and Data Mining. 3937-3946.
+
+Alex Deng, Luke Hagar, Nathaniel T Stevens, Tatiana Xifara, and Amit Gandhi.
+2024. Metric Decomposition in A/B Tests. In Proceedings of the 30th ACM SIGKDD
+Conference on Knowledge Discovery and Data Mining. 4885-4895.
+
+Alex Deng, Ya Xu, Ron Kohavi, and Toby Walker. 2013. Improving the sensitivity
+of online controlled experiments by utilizing pre-experiment data. In Proceedings
+of the sixth ACM international conference on Web search and data mining. 123-132.
+Pavel Dmitriev, Brian Frasca, Somit Gupta, Ron Kohavi, and Garnet Vaz. 2016.
+Pitfalls of long-term online controlled experiments. In 2016 IEEE international
+conference on big data (big data). IEEE, 1367-1376.
+
+Miroslav Dudik, John Langford, and Lihong Li. 2011. Doubly robust policy
+evaluation and learning. arXiv preprint arXiv:1103.4601 (2011).
+
+Alexandre Gilotte, Clément Calauzénes, Thomas Nedelec, Alexandre Abraham,
+and Simon Dollé. 2018. Offline a/b testing for recommender systems. In Proceed-
+ings of the Eleventh ACM International Conference on Web Search and Data Mining.
+198-206.
+
+Katja Hofmann, Shimon Whiteson, and Maarten De Rijke. 2011. A probabilistic
+method for inferring preferences from clicks. In Proceedings of the 20th ACM
+international conference on Information and knowledge management. 249-258.
+Katja Hofmann, Shimon Whiteson, and Maarten De Rijke. 2013. Fidelity, sound-
+ness, and efficiency of interleaved comparison methods. ACM Transactions on
+Information Systems (TOIS) 31, 4 (2013), 1-43.
+
+Daniel G Horvitz and Donovan J Thompson. 1952. A generalization of sampling
+without replacement from a finite universe. Journal of the American statistical
+Association 47, 260 (1952), 663-685.
+
+Guido W Imbens and Donald B Rubin. 2015. Causal inference in statistics, social,
+and biomedical sciences. Cambridge university press.
+
+Kalervo Jarvelin and Jaana Kekalainen. 2002. Cumulated gain-based evaluation
+of IR techniques. ACM Transactions on Information Systems (TOIS) 20, 4 (2002),
+422-446.
+
+Thorsten Joachims. 2002. Optimizing search engines using clickthrough data.
+In Proceedings of the eighth ACM SIGKDD international conference on Knowledge
+discovery and data mining. 133-142.
+
+Thorsten Joachims et al. 2003. Evaluating Retrieval Performance Using Click-
+through Data.
+
+Thorsten Joachims and Adith Swaminathan. 2016. Counterfactual evaluation and
+learning for search, recommendation and ad placement. In Proceedings of the 39th
+International ACM SIGIR conference on Research and Development in Information
+Retrieval. 1199-1201.
+
+Ron Kohavi and Nanyu Chen. 2024. False positives in a/b tests. In Proceedings
+of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining.
+5240-5250.
+
+Ron Kohavi, Roger Longbotham, Dan Sommerfield, and Randal M Henne. 2009.
+Controlled experiments on the web: survey and practical guide. Data mining and
+knowledge discovery 18 (2009), 140-181.
+
+Ron Kohavi, Diane Tang, and Ya Xu. 2020. Trustworthy online controlled experi-
+ments: A practical guide to a/b testing. Cambridge University Press.
+
+Kevin Liou and Sean J Taylor. 2020. Variance-weighted estimators to improve
+sensitivity in online experiments. In Proceedings of the 21st ACM Conference on
+Economics and Computation. 837-850.
+
+Alberto Maria Metelli, Alessio Russo, and Marcello Restelli. 2021. Subgaussian
+and differentiable importance sampling for off-policy evaluation and learning.
+Advances in neural information processing systems 34 (2021), 8119-8132.
+
+Filip Radlinski and Nick Craswell. 2013. Optimized interleaving for online re-
+trieval evaluation. In Proceedings of the sixth ACM international conference on
+Web search and data mining. 245-254.
+
+Filip Radlinski, Madhu Kurup, and Thorsten Joachims. 2008. How does click-
+through data reflect retrieval quality?. In Proceedings of the 17th ACM conference
+on Information and knowledge management. 43-52.
+
+Paul R Rosenbaum and Donald B Rubin. 1983. The central role of the propensity
+score in observational studies for causal effects. Biometrika 70, 1 (1983), 41-55.
+Yi Su, Maria Dimakopoulou, Akshay Krishnamurthy, and Miroslav Dudik. 2020.
+Doubly robust off-policy evaluation with shrinkage. In International Conference
+on Machine Learning. PMLR, 9167-9176.
+
+Yi Su, Lequn Wang, Michele Santacatterina, and Thorsten Joachims. 2019. Cab:
+Continuous adaptive blending for policy evaluation and learning. In International
+
+Qing Zhang et al.
+
+Conference on Machine Learning. PMLR, 6005-6014.
+
+29] Adith Swaminathan and Thorsten Joachims. 2015. Batch learning from logged
+
+bandit feedback through counterfactual risk minimization. The Journal of Machine
+
+Learning Research 16, 1 (2015), 1731-1755.
+
+30] Adith Swaminathan and Thorsten Joachims. 2015. The self-normalized estimator
+
+for counterfactual learning. advances in neural information processing systems 28
+
+2015).
+
+31 oe How Tan, Austin Chan, Malay Haldar, Jie Tang, Xin Liu, Mustafa Abdool,
+
+Huiji Gao, Liwei He, and Sanjeev Katariya. 2023. Optimizing Airbnb Search Jour-
+
+ney with Multi-task Learning. In Proceedings of the 29th ACM SIGKDD Conference
+
+on Knowledge Discovery and Data Mining. 4872-4881.
+
+32] Yu-Xiang Wang, Alekh Agarwal, and Miroslav Dudik. 2017. Optimal and adaptive
+
+off-policy evaluation in contextual bandits. In International Conference on Machine
+
+Learning. PMLR, 3589-3597.
+
+33] Huizhi Xie and Juliette Aurisset. 2016. Improving the sensitivity of online con-
+trolled experiments: Case studies at netflix. In Proceedings of the 22nd ACM
+SIGKDD International Conference on Knowledge Discovery and Data Mining. 645-
+654.
+
+A IMPLEMENTATION GUIDELINES FOR
+ADOPTION
+
+We would like to provide suggestions on two areas that are key to
+adaption, which are event attribution and hyperparameter tuning.
+
+A.1_ User Event attribution
+
+When applying our methods, practitioners need to carefully design
+the logic that attributes events, such as bookings, to the appearance
+of items, like listings shown in search or recommendation feeds. In
+cases where the booked listing appears in multiple search results,
+deciding on an attribution window becomes necessary. Options
+include attributing the booking to the appearance in the last search,
+to searches within the last two days, or to all searches within the
+experiment period. The choice could be based on the analysis on
+user decision making process.
+
+A.2 Counterfactual evaluation
+hyperparameters
+
+The selection of hyperparameters, specifically the attention de-
+cay factor y and the similarity threshold a, is contingent upon the
+product’s interface. For instance, a horizontal layout typical of rec-
+ommendation systems may necessitate different parameter values
+compared to a vertical layout, which is common for search results.
+These parameters are crucial for accurately modeling user behavior
+and must be tailored to the specific characteristics of the product.
+Concretely, a possible procedure of tuning the parameters is as
+follows.
+
+e Initial value yo will be determined by curve fitting on the
+click or booking distribution across ranked positions, then
+we pick candidate values centered around yo. Subsequently
+we will mainly use meta-analysis to compare the metrics
+correlations that’s corresponding to each value with A/B
+tests.
+
+e a value will be determined by meta-analysis on values such
+as {0, 1, 2, 3}.

@@ -1,0 +1,1864 @@
+2508 .00707v1 [cs.LG] 1 Aug 2025
+
+arXiv
+
+Efficient Solution and Learning of Robust Factored MDPs
+
+Yannik Schnitzer, Alessandro Abate, David Parker
+
+University of Oxford
+Department of Computer Science
+{yannik.schnitzer,alessandro.abate,david parker} @cs.ox.ac.uk
+
+Abstract
+
+Robust Markov decision processes (r-MDPs) extend MDPs
+by explicitly modelling epistemic uncertainty about transition
+dynamics. Learning r-MDPs from interactions with an un-
+known environment enables the synthesis of robust policies
+with provable (PAC) guarantees on performance, but this can
+require a large number of sample interactions. We propose
+novel methods for solving and learning r-MDPs based on fac-
+tored state-space representations that leverage the indepen-
+dence between model uncertainty across system components.
+Although policy synthesis for factored r-MDPs leads to hard,
+non-convex optimisation problems, we show how to reformu-
+late these into tractable linear programs. Building on these,
+we also propose methods to learn factored model representa-
+tions directly. Our experimental results show that exploiting
+factored structure can yield dimensional gains in sample effi-
+ciency, producing more effective robust policies with tighter
+performance guarantees than state-of-the-art methods.
+
+1 Introduction
+
+Markov decision processes (MDPs) are the standard mod-
+elling framework for sequential decision-making under un-
+certainty. However, real-world dynamics are often complex
+and not fully known. In safety-critical settings, it is there-
+fore essential to reason about epistemic uncertainty, due to
+incomplete knowledge of the environment, and to construct
+robust policies that provide provable performance guaran-
+tees on the unknown environment they operate in.
+
+Robust Markov decision processes (t-MDPs) (Wiese-
+mann, Kuhn, and Rustem 2013) extend MDPs by not re-
+quiring every transition probability to be known precisely
+but only restricting them to lie in a given uncertainty set.
+These uncertainty sets are typically derived from data, e.g.,
+observed interactions with the unknown system, as in re-
+inforcement learning (RL). Learning for r-MDPs, however,
+does not optimise for expected performance alone; rather,
+it enables the synthesis of policies that are robust with re-
+spect to the current epistemic uncertainty in the transition
+dynamics and provides provable Probably Approximately
+Correct (PAC) guarantees on performance with high con-
+fidence (Strehl and Littman 2005; Suilen et al. 2022).
+
+Unlike robust RL approaches, that often focus on heuristic
+or empirical training for difficult scenarios (Morimoto and
+Atkeson 2002; Pinto et al. 2017), r-MDP learning operates
+
+on explicit uncertainty sets learned from data and yields for-
+mal anytime guarantees on worst-case performance under
+the true but unknown transition model.
+
+A practical limitation of r-MDP learning and policy syn-
+thesis, however, is that, to achieve high-confidence per-
+formance guarantees, the overall confidence level must be
+distributed across all transition distributions (Strehl and
+Littman 2005) or individual transition probabilities (Suilen
+et al. 2022) being learnt. In large-scale environments, this
+enforces stringent confidence requirements, requiring a high
+number of samples to construct tight uncertainty sets that
+yield effective robust policies with meaningful guarantees.
+
+Many real-world domains come with structural knowl-
+edge that permits distinct features of the state space to be
+modelled independently, giving rise to the model of factored
+MDPs (f-MDPs) (Koller and Parr 1999; Boutilier, Dean, and
+Hanks 1999). RL algorithms have been extended to exploit
+this factored structure (Kearns and Koller 1999; Guestrin,
+Patrascu, and Schuurmans 2002; Strehl 2007), often yielding
+exponential improvements in sample efficiency over learn-
+ing in the flat (non-factored) representation. While these
+methods come with PAC guarantees, ensuring that a near-
+optimal policy is learned with high probability in time poly-
+nomial in the factored representation, existing work focuses
+on expected performance and convergence rather than pro-
+viding provable guarantees on worst-case performance.
+
+In this work, we introduce a robust factored MDP frame-
+work, which leverages structural independence to construct
+uncertainty sets for each state factor rather than for a flat
+model. We show that robust policy synthesis in this set-
+ting leads to intractable non-convex optimisation problems,
+but that for standard uncertainty classes, such as confidence
+intervals, L; balls and general polytopes, these problems
+admit exact convex reformulations. To address the compu-
+tational challenges of the resulting, potentially exponential
+constraint sets, we leverage convex relaxations that preserve
+tight performance guarantees while enabling efficient solu-
+tion. We show that our method synthesises more effective
+robust policies with high-confidence performance guaran-
+tees that are substantially tighter than those of prior factored
+MDP learning approaches. Furthermore, we show that ex-
+ploiting the factored structure can improve the sample ef-
+ficiency of robust policy learning by orders of magnitude
+compared to state-of-the-art methods in flat representations.
+
+
+2 Problem Formulation
+
+The set of all probability distributions over a finite set Y is
+denoted by A(Y) = {p: Y > [0,1] | Mycy ply) = 1}.
+For convenience, we also represent distributions as vectors
+in the probability simplex, (pj, ... , Py) € Ajy), where
+pi = p(y;) under a fixed ordering of the elements of Y.
+
+2.1 MODPs and Factored MDPs
+
+A Markov decision process (or MDP) is a tuple M =
+(S,A,T,1r), where S and A are finite sets of states and ac-
+tions, T: S x A — A(S) is a transition probability func-
+tion, and r: S x A — R is a reward function. A policy is a
+mapping 7: (S x A)* x S — A(A) that resolves the non-
+determinism by selecting a distribution over actions based
+on the current state and past interactions. The interaction be-
+tween a policy and an MDP induces infinite sequences (or
+paths) of the form s°a°s'a!..., where at each step, the next
+action is drawn from the distribution assigned by the policy,
+given the current history prefix, and the next state is drawn
+from the transition distribution T( - |s, a).
+
+A factored MDP (or f-MDP) is an MDP in which
+states are represented as vectors of m components X =
+
+{X1,...,Xn}. Each factor X; (also referred to as a state
+variable or state marginal) takes values from a finite domain
+D(X;). Hence, states are tuples (1,...,2n), with a; €
+
+D(X;). To capture the (in-)dependence between factors, we
+adopt the framework of Strehl (2007). Given a finite set Z of
+dependency identifiers, a function D: S x Ax X > Tisa
+dependency function. The transition function is defined as
+
+n
+
+T(s'|s,a) = ]] P(si|D(s, a, X;)), (1)
+
+i=l
+
+where s’ denotes the i-th component of the next state s’ and
+each P(-|D(s,a,X;)) € A(D(X;)) specifies the marginal
+probability distribution of the respective factor.
+
+Example 1. A classic example of a factored MDP is
+the System Administrator domain (Guestrin, Patrascu, and
+Schuurmans 2002), where an administrator controls a total
+of n machines or factors, each of which can be either oper-
+ational or in a failure state. Each machine is connected to a
+subset of the others, and its probability of failing at the next
+step depends on whether its connected neighbours are oper-
+ational, but is independent of all other machines. The depen-
+dency identifiers for machine 7 thus capture the current state
+of the machine itself and those of its connected neighbours:
+if one or more of these neighbours are in a failure state, the
+marginal probability that machine 27 fails increases.
+
+2.2 Robust Factored MDPs
+
+Robust factored MDPs (or rf-MDPs) (Delgado et al. 2009;
+Liu, Wiesemann, and Yue 2024) extend factored MDPs to
+incorporate epistemic uncertainty about transition dynam-
+ics. They generalise fixed marginal transition distributions
+P(-|D(s,a, X;)) € A(D(X;)) to marginal uncertainty sets
+P(D(s, a, X;)) C A(D(X;)). The overall uncertainty set of
+
+possible transition distributions at (s, a) is then defined as:
+i=l
+
+where ® denotes the outer product (or Kronecker product)
+of distributions, extended to sets. Specifically, for sets P C
+A(D(X;)) and Q C A(D(X;)), the product is defined as
+
+P®QW={POQ|PEP, QED, (3)
+where for distributions P = (pi,...,Pm) and Q =
+(q1,---5 4k), their outer product is given by
+
+(P@Q)ij=pig, 1<i<mi<j<k
+
+Hence, 7 (s,a) comprises all product distributions over the
+factor-wise uncertainty sets, providing a structured represen-
+tation of the uncertainty over the full state space S.
+
+As in standard robust MDPs (Nilim and Ghaoui 2005;
+Iyengar 2005; Wiesemann, Kuhn, and Rustem 2013), rf-
+MDPs introduce an additional step in the evolution of the
+process: at a given state s, before the next state is determined
+following the selection of action a, an environment policy T
+selects, for each factor X;, a marginal distribution from the
+corresponding uncertainty set P(D(s,a, X;)). These com-
+bine into a product distribution, as per Eq. (1), which lies in
+the overall uncertainty set 7(s,a) and defines the probabil-
+ity distribution from which the successor state is drawn.
+
+Objectives. An objective is a mapping R that assigns a re-
+
+turn to each infinite path p = s°a°stat... in anrf-MDP M.
+
+Given a pair of agent and environment policies 7 and T, we
+denote by Ds the induced expectation over paths starting
+
+in state s (Wolff, Topcu, and Murray 2012). The value of s
+under 7 and 7 with respect to objective R is defined as
+
+Vi" (s) = ED [R. (5)
+
+Unless stated otherwise, our results are agnostic to the spe-
+cific choice of objective. The most common objective is the
+discounted cumulative reward:
+
+R(p) = S>y'r(s‘,a°), (6)
+t=0
+
+for some discount factor 0 < y < 1. However, our re-
+sults readily extend to other objectives, such as undiscounted
+rewards (Schwartz 1993; Puterman 1994; Meggendorfer,
+Weininger, and Wienhdft 2025) or reachability goals fo-
+cussing on the probability of eventually reaching a target set
+of states, possibly whilst avoiding certain undesirable states.
+
+Robust Values and Policies The optimal robust policy x*
+in an rf-MDP MM is the policy that achieves, in every state,
+the optimal robust value V~,(s), which is the best possible
+value under the worst-case environment policy. Formally:
+
+Vis) = sup inf Viv" (s), and (7)
+
+m* = argsup inf Vir (s). (8)
+
+
+In this paper, we implicitly assume that the agent aims to
+maximise the objective while the environment adversari-
+ally seeks to minimise it. All results remain valid under the
+dual case with reversed roles (Nilim and Ghaoui 2005). It
+is straightforward to verify that the policy 7* guarantees at
+least the value V* (s) on any concrete f-MDP obtained by
+fixing specific distributions from the uncertainty sets.
+
+Next, in Section 3, we present novel methods for ef-
+ficiently and accurately solving rf-MDPs, i.e., computing
+optimal robust values and policies, assuming polytopic
+marginal uncertainty sets, such as the commonly used 11,
+Lg, balls and general L,, balls. Then, in Section 4, we lever-
+age these methods to efficiently learn robust policies with
+provable performance guarantees in unknown f-MDPs.
+
+3 Solving Robust Factored MDPs
+
+As for standard robust MDPs, the optimal value function
+V;, and a corresponding robust policy for an rf-MDP can be
+computed with robust value iteration (Iyengar 2005; Nilim
+and Ghaoui 2005). Assuming rectangular uncertainty sets,
+meaning that each state—action pair has an independent un-
+certainty set over which the environment can act adversari-
+ally, the global problem decouples into a local optimisation
+at every state. For any state s, the agent selects an action
+a € A that maximises the worst-case expected return over
+all transition kernels in 7 (s, a), yielding the robust Bellman
+equation, where V* (s) equals:
+
+.a) +y ¥° T(s'|s,0) VE (s')].
+max min [r(s,a) 1D (s'|s,a)Vi,(s')].
+
+Inner Optimisation
+
+The inner optimisation captures the environment’s adversar-
+ial choice of a transition kernel within 7 (s, a). For standard
+(non-factored) robust MDPs, this is tractable when 7(s, a)
+has a favourable geometry: e.g., an LD; or Lo ball, which is
+solvable via bisection in time linear-logarithmic in the sup-
+port size (Strehl and Littman 2005), or a polytope described
+by a number of vertices or half-spaces that can be solved via
+linear programming (Nilim and Ghaoui 2005).
+
+rf-MDPs, however, induce uncertainty sets 7 (s, a) as the
+multilinear product of marginal sets (see Equation (2)). Even
+if every marginal P(D(s,a,X;)) is convex, convexity is
+in general not preserved under the product; consequently,
+T (s, a) can in general be non-convex (see Figure 1), render-
+ing the inner optimisation hard and often intractable.
+
+We show that when the marginals are polytopes, the asso-
+ciated non-linear problem admits an exact linear reformula-
+tion whose constraints follow directly from the polytopic de-
+scriptions of the marginals. However, the number of result-
+ing constraints can grow rapidly for many common classes
+of uncertainty sets. To retain tractability, we construct tight
+linear overapproximations of J (s, a), yielding robust Bell-
+man updates that allow for an efficient and accurate solution.
+
+3.1 Exact Products of Polytopic Uncertainty Sets
+
+We consider polytopic marginal uncertainty sets P defined
+as the convex hull of finitely many extreme distributions,
+
+P2° qo
+
+(b) Product States
+and Uncertainty Set
+
+(a) Marginal States
+and Uncertainty Sets
+
+Figure |: Part (a) shows two factors of an rf-MDP, with con-
+vex marginal uncertainty sets P and Q, which are line seg-
+ments in the two-dimensional probability simplex. The re-
+sulting product uncertainty set P @ Q in (b) is non-convex.
+
+ie., P = conv{P®,..., POM} = {TT APO | Ay >
+0, oy, Ai = 1}. We first prove that the resulting inner op-
+timisation problem in (9), taken over the non-convex prod-
+uct uncertainty set 7 (s, a), admits an exact linear reformu-
+lation. In contrast to prior approaches for solving robust fac-
+tored MDPs (Delgado, Sanner, and de Barros 2011), this re-
+sult allows us to avoid the invocation of an expensive and po-
+tentially approximate non-linear solver. It builds on two key
+observations: first, by the bilinearity of the Kronecker prod-
+uct ® (Horn and Johnson 1991), the convex hull of T(s, a)
+is a polytope whose extreme points are precisely the pair-
+wise products of the extreme distributions of the marginal
+polytopes (Horst and Tuy 1996), and second, the inner op-
+timisation is linear in the transition probabilities and thus
+attains its optimum at a vertex of the convex hull.
+
+Theorem 1. Let P = conv{P™,...,P°™} C Any and
+Q = conv{Q™,...,Q®} C An be polytopic marginal
+uncertainty sets. Then the corresponding non-linear inner
+optimisation problem in Equation (9) attains its optimum at
+one of the products of the marginal extreme distributions:
+
+{PX aQ” |isi<m, L<j<kh.
+
+The full proof is provided in Appendix A. Theorem |
+inductively extends to any number of marginals and offers
+a direct approach to solving the inner optimisation prob-
+lem exactly by enumerating the product vertices induced
+by the marginal uncertainty sets of each factor. However,
+the number of such vertices can grow rapidly, rendering ex-
+plicit enumeration computationally infeasible, even for stan-
+dard classes of uncertainty sets arising from statistical esti-
+mation (Strehl and Littman 2005; Suilen et al. 2024). For
+example, when the marginal sets are defined as L, or Lo
+balls centred around a nominal distribution, the number of
+vertices per marginal can grow exponentially in the support
+size. A detailed construction can be found in Appendix C.
+
+3.2 Efficient Solutions through Relaxations
+
+To mitigate the potential intractability of the exact inner op-
+timisation, we use relaxations, i.e., overapproximations of
+
+
+the uncertainty set 7 (s, a) that trade exactness for tractabil-
+ity. Since the relaxed set is a superset of the true one, the
+value returned by the relaxed Bellman operator is a lower
+bound on the exact robust value, guaranteeing that the result-
+ing policy never underperforms against any transition kernel
+in the original uncertainty set. This sound, worst-case guar-
+antee distinguishes our approach from earlier methods for
+rf-MDPs, which rely on approximate value-function fitting
+over a fixed basis (Delgado et al. 2009; Delgado, Sanner,
+and de Barros 2011; Liu, Wiesemann, and Yue 2024). Such
+schemes provide no formal bound on the policy’s perfor-
+mance and therefore cannot in general provide safety guar-
+antees as required in robust learning.
+
+We aim for tight relaxations, admitting as few spurious
+distributions (i.e., distributions not in the true set) as pos-
+sible. An overly loose relaxation can lead to a pessimistic
+bound, and result in an unnecessarily conservative policy.
+
+We first consider marginal uncertainty sets that take the
+form of boxes (or hyper-rectangles) intersected with the
+probability simplex, which are generalisations of L., balls.
+
+These arise naturally when individual transition probabil-
+ities are estimated from observed data using confidence in-
+tervals (Strehl and Littman 2005; Suilen et al. 2022). A box
+is defined by lower and upper bounds p, Dp € [0, 1)" on each
+component of a probability distribution, with D, SD; for all
+1<i<_N, yielding the uncertainty set
+
+Pp ={(pi.-.pr)€An|p, <p sR}. (10)
+
+Robust MDPs defined in this way are called interval or
+bounded-parameter MDPs (Givan, Leach, and Dean 2000).
+
+Interval-Arithmetic Relaxation. A natural relaxation for
+products of distributions in interval MDPs is to use interval
+arithmetic. In fact, this approach is taken in the modelling
+language of the PRISM tool (Kwiatkowska, Norman, and
+Parker 2011), which supports compositional modelling of
+interval MDPs. Given two box-type uncertainty sets Pp C
+Ay and Qp C Ay with respective bounds p,p € [0, 1)”
+and q,@ € [0,1], the corresponding interval-arithmetic re-
+laxation Rig C Ajy.n is defined as
+
+Ria = {He Aw |p,d,<hiy BG}. AD
+
+While the interval-arithmetic relaxation is tight with respect
+to each component individually, it fails to capture depen-
+dencies across components and can therefore introduce a
+large amount of spurious distributions (Hashemi, Hermanns,
+and Turrini 2016; Mathiesen, Haesaert, and Laurenti 2024).
+In particular, it admits spurious extreme points, potentially
+leading to overly conservative solutions in the inner optimi-
+sation problem, as we demonstrate in the following example.
+
+Example 2.
+Pp = {(p,1—p) € Ag |p € (0.2, 0.6]}, and
+Their interval-arithmetic product relaxation Rjq is:
+
+(0.02, 0.18] x [0.14, 0.54] x [0.04, 0.24] x [0.28, 0.72] N Ag.
+
+aS S
+eB e
+a a
+i) Q
+
+Figure 2: Projections of the interval-arithmetic (blue) and
+McCormick (pink) relaxations for the product of box-type
+uncertainty sets (coloured curve). The McCormick relax-
+ation is tighter and has fewer spurious extreme distributions.
+
+Now consider H = (0.18, 0.14, 0.24, 0.44) € Ria. We
+can verify that H is a vertex of R;,, as three bounds are
+tight. Since hy = 0.18 = pq, the box constraints imply that
+p = 0.6 and q = 0.3. But then it must be that:
+
+(p(1— 4), (L—p)a, (L— p)(1 — )) = (0.42, 0.12, 0.28),
+
+so the only valid product distribution with pg = 0.18 is
+(0.18, 0.42, 0.12,0.28) # H. Thus # is not contained in
+the actual product uncertainty set Pp © Op.
+
+McCormick Relaxation. In order to tackle the issue of
+spurious distributions in interval-arithmetic relaxations, and
+the conservative solutions to the inner optimisation problem
+in (9) that may result, we draw on results from non-linear
+global optimisation and employ McCormick envelopes (Mc-
+Cormick 1976). These provide tight convex relaxations of
+multilinear products through a polynomial number of linear
+constraints, yielding a tractable linear program that closely
+approximates the original non-linear formulation.
+
+For two variables p € [p, p] and q € [q, g], the McCormick
+envelopes are defined by the following linear inequalities:
+h>pat+4qp-P4, (12a)
+h>pq+aP—DPG, (12b)
+h<pq+qP-Pq, (12c)
+h<pq+qp-p7q. (12d)
+
+Each inequality arises from combining the bounds on p and
+q. For instance, since p > p and q > q, we have
+
+(p—p)(q—q) = 9.
+Expanding and substituting h = pq gives
+
+pa-pqa-qp+pqa20 = h=pqt+aqp-pa,
+
+which is precisely Equation (12a). Despite their simplicity,
+these inequalities suffice to exactly characterise the convex
+hull of a single bilinear product h = pg (McCormick 1976).
+
+When applied to the inner optimisation in Equation (9)
+over a product uncertainty set as per Equation (2), each bilin-
+ear term p;q; is replaced by an auxiliary variable h;;, which
+
+
+is constrained by the four McCormick inequalities in (12).
+We then impose the global simplex constraint yi, j hij =1,
+
+ensuring that the auxiliaries {h,;};,; define a valid proba-
+bility distribution. This reformulation linearises the original
+non-linear inner optimisation. Figure 2 illustrates how the
+McCormick relaxation excludes many of the spurious ex-
+treme points admitted by the interval-arithmetic relaxation,
+thus resulting in less conservative solutions and more effec-
+tive (whilst still robust) policies. Furthermore, since each h;;
+contributes to exactly four McCormick constraints, the to-
+tal number of constraints grows only polynomially with the
+marginal supports, yielding a tractable inner linear program.
+Full details of this construction and its extension to products
+of more than two marginal uncertainty sets (obtained by re-
+cursive applications) are provided in Appendix B.
+
+Relaxations for L, Uncertainty Sets. The constructions
+above enable the exact composition of polytopic uncertainty
+sets and provide tight-yet-tractable relaxations for box-type
+uncertainty sets. We now also consider uncertainty sets that
+are L,, norm balls centred at a nominal distribution Pea N;
+which are typically estimated from observed data as:
+
+Pp(P,2) = {P € An | ||P— Pllp < eh.
+
+These sets are generally not polytopic, for 1 < p < oo. We
+hence extend a result from Strehl (2007), originally formu-
+lated for the composition of L balls, to arbitrary L,, norms:
+
+Theorem 2. Let P,(P, €1) and P,(Q, €2) be two Ly uncer-
+tainty sets for some 1 < p < oo. Then:
+
+Py(P,€1) ® Pp(Q, €2) C Pp(P ® Q,e1 + £2).
+
+We provide the proof in Appendix A. This result offers
+an alternative approach to solving non-polytopic rf-MDPs,
+complementing the constructions presented in Section 3.2.
+When applied to L; uncertainty sets, it directly extends the
+PAC analysis of Strehl (2007) to robust policy synthesis.
+In Section 5, we compare the various relaxations, showing
+that our constructions yield substantially tighter uncertainty
+sets, enable more sample-efficient learning, and deliver ro-
+bust policies with stronger performance guarantees.
+
+4 Robust Policy Learning in Factored MDPs
+
+We now introduce a novel learning approach that integrates
+factored model estimation with accurate and tractable ro-
+bust planning, generating policies that are provably robust
+for unknown f-MDPs. Based on agent interactions with the
+environment, we derive marginal uncertainty sets, such as
+confidence intervals or L; balls, which induce a polytopic
+rf-MDP. Leveraging the solution methods in the previous
+section, we exploit this factored structure to achieve dimen-
+sional gains in sample efficiency compared to existing robust
+learning methods in flat models, as we demonstrate in our
+experimental evaluation. Crucially, our approach provides a
+finite-sample, anytime PAC guarantee: after any number of
+interactions, we can bound the worst-case performance in
+the unknown MDP with high confidence.
+
+We consider a factored MDP M with known state space
+but unknown (marginal) transition distributions. For clarity,
+
+we assume that the reward function is known, but all re-
+sults extend to the case of unknown reward functions (Strehl
+and Littman 2005). Our algorithm has access to agent-
+environment interactions in the form of a dataset of tran-
+sition samples C = {(S¢, az, 5;)}z, where a, is the action
+taken in state s; under some exploration policy and s}, is the
+observed successor state. We remain agnostic to the precise
+sampling mechanism and assume that the sample set C is
+given. In Section 5, we describe the specific sampling pro-
+cedure used in our evaluation.
+
+From the definition of a factored MDP, we first identify
+the relevant transition components that must be estimated.
+For a state—action pair (s, a), the relevant dependencies are
+
+Ds,a = {(Xi, 3) EXxT | j = D(s,a, X;)}.
+Aggregating over all state—action pairs yields the set of rel-
+
+evant transition components: OQ = U ajeSxA Ds,a, 80
+
+that |Q| counts the number of marginal transition distribu-
+tions to be estimated. The total number of unknown transi-
+tion probabilities is the sum of the supports of the marginals:
+U = Yox jeg Supp (P(- | j))|- For a sample dataset
+C = {(S+, az, 54) }z, we define the realisation counts:
+
+S> 1(D(s, a, X;) =jA s= xi),
+(s,a,s’)EC
+
+n(xi,J) =
+
+and the component counts:
+
+SS) SO 1(D(s,4, Xi) = 5),
+
+(s,a,s’)EC XiEX
+
+n(j) =
+
+for x; € D(X;) and j € TZ. Here, n(j) is the total number
+of encountered transitions whose transition probability dis-
+tribution involves a marginal with dependency identifier 7,
+while n(a;, 7) records how often such transitions lead to the
+marginal state component «;. From this we can derive the
+empirical estimates of the marginal distributions as
+
+n(si,, D(s, a, X;))
+n(D(s,a,X;))
+
+While this empirical estimate becomes increasingly accurate
+with more data, it provides no quantification of uncertainty.
+We aim to synthesise a policy that, after any fixed number of
+samples, comes with a guaranteed lower bound on its per-
+formance in the unknown f-MDP. To achieve this, we inflate
+each point estimate into a high-confidence uncertainty set
+over the marginal distribution, thereby defining an rf-MDP.
+
+P(s}|D(s,a, Xi)) = (13)
+
+4.1 Uncertainty Set Construction
+
+We consider two established methods for constructing un-
+certainty sets. The first builds exact binomial confidence
+intervals for each transition probability, treating each out-
+come s’, under dependency j = D(s,a, X;) as a Bernoulli
+trial (Suilen et al. 2022; Meggendorfer, Weininger, and
+Wienhoft 2024). Given « = n(si,7) “successes” inn =
+n(j) trials and an error probability 6 € (0, 1), the true tran-
+sition probability P(s‘ | 7) lies in the interval:
+
+CP(s), 7) = [B(2;2, n—x+l), B(l- Ssa+1, n—2x)|
+
+
+with probability at least 1 — 6, where B(a; u, v) denotes the
+a-quantile of the Beta(u, v) distribution (Clopper and Pear-
+son 1934). Applying these bounds independently to each
+transition component defines the box-type uncertainty sets
+
+P(j) = { Pe A(D(X)) | P'(s)) € CPCs) si},
+
+to which our rf-MDP solution techniques apply directly.
+Throughout, we assume n(j) > 0. When n(j) = 0, we
+set the uncertainty sets as the entire probability simplex.
+The second approach centres on an L;-norm ball around
+the empirical marginal distribution P(-| 7). For each rele-
+vant dependency identifier 7 = D(s,a, X;) € Q, we set
+
+PUj) = { PE A(X) | IP) = PC Lh se}.
+
+where ¢€ follows from Weissman et al. (2003) as
+
+. i 2[In(24 — 2) — In(3)]
+
+n(j)
+This ensures that the true marginal lies in P(j) with proba-
+bility at least 1— 6. This approach underpins the native PAC-
+learning results for both factored and standard MDPs (Strehl
+and Littman 2005; Strehl 2007). Moreover, it yields poly-
+topic uncertainty sets, as the intersection of an Lj, ball with
+the probability simplex is still a polytope, thus permitting ex-
+act composition via Theorem |. However, L, balls do not in-
+tegrate naturally into the McCormick relaxation without fur-
+ther overapproximating them as box-type sets. As we show
+in Appendix D, overapproximating L, balls by their smallest
+enclosing box always yields a looser uncertainty set than ap-
+plying the box-type construction directly. Consequently, the
+radius-sum result of Theorem 2 is the natural choice when
+composing L, marginal sets with a large number of vertices.
+
+a = |supp(P(- | /))]-
+
+4.2 Provably Robust Policy Synthesis
+
+To obtain a provably robust policy with quantifiable perfor-
+mance guarantees in the unknown f-MDP M, we construct
+an rf-MDP / using the uncertainty sets described above.
+For the guarantees to be meaningful, we must ensure that
+the unknown MDP & is contained in M (denoted M € M)
+with high, user-specified confidence. This means that every
+marginal distribution P( -|j) for (X;, 7) € Q must lie within
+its corresponding uncertainty set P(j).
+
+Given a desired overall confidence probability 1 — 8, we
+follow the standard approach of Strehl (2007) and distribute
+the total error probability 8 € (0,1) across all learnt dis-
+tributions/transitions. Under the L,, scheme, this results in
+56 = 6/U, and under the L; scheme, in 6 = 3/|Q|. By the
+union bound, this ensures that MM € M with probability at
+least 1 — G, regardless of the number of observed samples.
+
+When solving the learned rf-MDP M using a robust, i.e.,
+either exact or relaxation-based method from Section 3, the
+following performance guarantee for the resulting robust
+policy on the true, unknown f-MDP &/ follows immediately:
+
+Theorem 3. Let M be an f-MDP and M an rf-MDP such
+that Pr[M € M] > 1-8 for some 8 > 0. Let x* be the
+
+policy obtained by solving M with a robust solution method,
+and let Ve (s) denote its corresponding robust value. Then,
+
+Pr[Vir (8) = Var (s)] 21-8 a4)
+
+In other words, with probability at least 1 — 6, the learned
+robust policy 7* achieves a value in every state of the true f-
+MDP that is no worse than its computed value in the learned
+rf-MDP. This PAC-style guarantee based on the novel ro-
+bust solution methods distinguishes our approach from prior
+methods (Delgado, Sanner, and de Barros 2011; Liu, Wiese-
+mann, and Yue 2024), which cannot guarantee a valid lower
+bound, thus forfeiting such a performance guarantee.
+
+5 Experiments
+
+We integrated our methods into the PRISM solver for prob-
+abilistic models (Kwiatkowska, Norman, and Parker 2011),
+which offers a modular language for specifying factored
+MDPs. We augment PRISM with our algorithms for solving
+and learning robust factored MDPs and employ the Gurobi
+optimiser with default parameters for all linear programs.
+
+5.1 Evaluation: Solving rf-MDPs
+
+We evaluate the three methods for solving rf-MDPs with
+box-type uncertainty sets: vertex enumeration, interval-
+arithmetic relaxations, and McCormick relaxations, across
+a range of benchmark environments. These include classic
+f-MDP domains such as the System Administrator domain
+discussed in Example 1 (Guestrin, Patrascu, and Schuur-
+mans 2002), as well as established r-MDP case studies with
+inherent factored structure, including multi-agent scenarios
+like the Aircraft Collision Avoidance domain (Kochenderfer
+2015). Detailed descriptions of each domain including the
+hyperparameters used are provided in Appendix E. For each
+domain, we obtain an rf-MDP by perturbing a nominal tran-
+sition kernel with an L., uncertainty radius of 0.025 (see
+Appendix F for additional levels of uncertainty), yielding
+box-type uncertainty sets for each factor.
+
+Results. Table | summarises the outcomes. For each
+method, we report: (i) the robust value of the optimal pol-
+icy in the rf-MDP; (ii) the runtime to solve the rf-MDP; and
+(iii) for relaxation-based methods, the relative gap to the ex-
+act result obtained by vertex enumeration, quantifying the
+additional conservatism introduced by over-approximating
+the product uncertainty sets.
+
+Notably, McCormick relaxations preserve the tightness of
+vertex enumeration while remaining computationally effi-
+cient. Interval-arithmetic relaxations, though generally fast,
+yield looser bounds due to spurious extreme distributions.
+Overall, McCormick relaxations strike the best balance be-
+tween solution tightness and runtime. We present the com-
+plete and extensive set of experiments, including analyses
+across varying uncertainty radii in Appendix F.
+
+5.2 Evaluation: Robust Policy Learning in f-MDP
+We next compare four methods for robust policy learning:
+(i) standard r-MDP learning in the flat model with box-type
+uncertainty sets; (ii) rf-MDP learning with L, uncertainty
+
+
+Domain \S| IT Vertex Enumeration Interval-Arithmetic McCormick
+Robust Value Time [s] | Robust Value Rel.Gap Time [s] | Robust Value Rel.Gap Time [s]
+Aircraft (+) 11153 1262099 0.73 2535.8 0.65 11% 6.1 0.73 0% 43.7
+Drone (tT) 262144 21694720 0.69 2125.8 0.63 10% 90.2 0.69 0% 190.7
+Stock Trading (f) 12481 5362624 25.43 67.6 17.60 31% 16.0 25.43 0% 67.5
+SysAdmin (7) 15873 9332587 50.70 66.7 46.66 8% 34.1 50.70 0% 64.1
+Chain (1) 100 3136 331.34 778.1 451.28 36% 0.6 331.34 0% 7.6
+Frozen Lake (|) 50625 1866556 216.01 1018.4 242.05 12% 67.7 216.01 0% 105.9
+Herman (1) 2048 177148 20.64 11.0 23.82 15% 2.8 20.64 0% 8.1
+
+Table 1: Results for solving rf-MDPs. Arrows ({/|) indicate optimisation directions. |,S| and |T'| denote the number of states and
+transitions. The relative gap is |Vyz—Vr|/Ve, where Vvyg and Vp are the robust results from vertex enumeration and respective
+relaxation. The complete set of experiments, with more results for varying uncertainty radii, are in Table 2 of Appendix F.
+
+=== McCormick === Interval-Arithmetic
+
+== = Robust
+
+=== Flat Learning | === Nominal
+
+1" fi Ti L ae L L L
+10! 107 10° 10* 10° 10° 10° 10 10 10
+
+- mn it L L L
+10 10 10° 10° 10 10 IC C(O (S(O TO
+Episode Episode
+
+(a) Aircraft (b) Frozen Lake
+
+i
+10°
+
+Episode Episode
+
+(c) Drone (d) SysAdmin
+
+Figure 3: Results for robust policy learning. The plots show objective value against processed fixed-length trajectories. Dashed
+curves show the robust guarantee for the learned robust policy, solid curves show its actual performance on the true model. The
+complete experimental results, including additional domains and total runtimes, are provided in Figure 4 of Appendix F.
+
+sets solved using the radius-sum result from Theorem 2,
+which is the direct extension of the PAC analysis of Strehl
+(2007) to robust policy learning and represents the only
+available baseline for rf-MDPs; (iii) & (iv) rf-MDP learn-
+ing with box-type marginal uncertainty sets solved via either
+interval-arithmetic or McCormick relaxation.
+
+To build the transition dataset C, we iteratively sample
+fixed-length trajectories that restart in the initial state. To
+balance exploration and exploitation, we follow the opti-
+mism in the face of uncertainty principle (Munos 2014), se-
+lecting actions that are optimal under the most favourable
+transition model within the current uncertainty sets. Note
+that this choice of sampling procedure is arbitrary: the result-
+ing robustness guarantees hold under any alternative sam-
+pling strategy, such as random action selection.
+
+Across all domains, we fix the overall confidence level
+for the inclusion of the true, unknown MDP in the learned
+t-MDP to 1 — 6 = 0.9999, (see Equation (14)). Each exper-
+iment is repeated with 10 distinct random seeds, and we re-
+port the average results along with standard deviation bands.
+
+Results. Figure 3 presents robust policy learning results
+across various domains. For each method, we plot the robust
+value of the learned policy (dashed lines) and its nominal
+performance on the true, hidden model (solid lines) against
+the number of processed trajectories. While true-model per-
+formance provides useful validation, our focus lies on the
+robust values, i.e., the performance that can be guaranteed
+with high confidence on the unknown environment.
+
+The results demonstrate significant gains in sample ef-
+ficiency by exploiting factored structures. Specifically, far
+
+fewer fixed-length trajectory samples are required to achieve
+equivalent robust performance guarantees compared to
+state-of-the-art methods on flat models. Furthermore, rf-
+MDP learning with box-type uncertainty sets, derived from
+exact confidence intervals and solved via convex relaxations,
+consistently outperforms approaches based on Lj uncer-
+tainty sets and the radius-sum method. McCormick relax-
+ations need about half the number of samples of interval-
+arithmetic relaxations for the same robust guarantees. This
+advantage is particularly crucial in domains where data col-
+lection is inherently limited, costly, or challenging.
+
+Figure 3a (red line) shows the number of samples needed
+to match the performance guarantee from flat learning on
+the Aircraft domain after 10° trajectories. Factored learn-
+ing with L, uncertainty sets reduces this to 3 - 10° trajec-
+tories. Interval-arithmetic relaxation further decreases it to
+10°, and McCormick relaxation is the most efficient, requir-
+ing only 6 - 10* trajectories. This gap becomes even more
+pronounced in other domains. We provide the full set of ex-
+periments including additional domains, total runtimes and
+detailed comparisons of sample efficiency in Appendix F.
+
+6 Conclusion
+
+We have presented novel methods for solving robust fac-
+tored MDPs, facilitating exact solutions and optimal robust
+policies for polytopic uncertainty sets. Utilising global op-
+timisation techniques, we developed relaxation-based ap-
+proaches that balance accuracy and computational tractabil-
+ity. Our experimental results show that these methods
+markedly improve accuracy in solving rf-MDPs and enable
+significantly more sample-efficient robust policy learning.
+
+
+Acknowledgements
+
+This work was partially supported by the ARIA projects
+SAINT and SUPER MARTINGALE CERTIFICATES, the
+UKRI AI Hub on Mathematical Foundations of AI, and
+the European Research Council (ERC) under the European
+Union’s Horizon 2020 research and innovation programme
+(grant agreement No. 834115, FUN2MODEL). The au-
+thors are grateful to Karan Mukhi for the insightful discus-
+sions on this work.
+
+References
+
+Araya-Lopez, M.; Buffet, O.; Thomas, V.; and Charpillet, F.
+2011. Active Learning of MDP Models. In EWRL, vol-
+ume 7188 of Lecture Notes in Computer Science, 42-53.
+Springer.
+
+Badings, T. S.; Cubuktepe, M.; Jansen, N.; Junges, S.; Ka-
+toen, J.; and Topcu, U. 2022. Scenario-based verification
+of uncertain parametric MDPs. Int. J. Softw. Tools Technol.
+Transf. , 24(5): 803-819.
+
+Boutilier, C.; Dean, T. L.; and Hanks, S. 1999. Decision-
+Theoretic Planning: Structural Assumptions and Computa-
+tional Leverage. J. Artif: Intell. Res., 11: 1-94.
+
+Clopper, C. J.; and Pearson, E. S. 1934. The Use of Confi-
+dence or Fiducial Limits Illustrated in the Case of the Bino-
+mial. Biometrika, 26(4): 404-413.
+
+Delgado, K. V.; de Barros, L. N.; Cozman, F. G.; and Shirota,
+R. 2009. Representing and Solving Factored Markov Deci-
+sion Processes with Imprecise Probabilities. In Proceedings
+of the 6th International Symposium on Imprecise Probabil-
+ity: Theories and Applications, 169-178.
+
+Delgado, K. V.; Sanner, S.; and de Barros, L. N. 2011. Ef-
+ficient solutions to factored MDPs with imprecise transition
+probabilities. Artif. Intell., 175(9-10): 1498-1527.
+
+Flajolet, P.; and Sedgewick, R. 2009. Analytic Combina-
+torics. Cambridge University Press.
+
+Givan, R.; Leach, S. M.; and Dean, T. L. 2000. Bounded-
+parameter Markov decision processes. Artif: Intell., 122(1-
+2): 71-109.
+
+Guestrin, C.; Koller, D.; Parr, R.; and Venkataraman, S.
+2003. Efficient Solution Algorithms for Factored MDPs. J.
+Artif. Intell. Res., 19: 399-468.
+
+Guestrin, C.; Patrascu, R.; and Schuurmans, D. 2002.
+Algorithm-Directed Exploration for Model-Based Rein-
+forcement Learning in Factored MDPs. In ICML, 235-242.
+Morgan Kaufmann.
+
+Hashemi, V.; Hermanns, H.; and Turrini, A. 2016. Compo-
+sitional Reasoning for Interval Markov Decision Processes.
+CoRR, abs/1607.08484.
+
+Herman, T. 1990. Probabilistic Self-Stabilization. Inf. Pro-
+cess. Lett., 35(2): 63-67.
+
+Hoeffding, W. 1994. Probability inequalities for sums of
+bounded random variables. Springer Series in Statistics.
+
+Horn, R. A.; and Johnson, C. R. 1991. Topics in Matrix
+Analysis. Cambridge University Press.
+
+Horst, R.; and Tuy, H. 1996. Global Optimization: De-
+terministic Approaches. Springer Series in Operations Re-
+search. Springer.
+
+Iyengar, G. N. 2005. Robust Dynamic Programming. Math.
+Oper. Res., 30(2): 257-280.
+Kearns, M. J.; and Koller, D. 1999. Efficient Reinforcement
+
+Learning in Factored MDPs. In IJCAI, 740-747. Morgan
+Kaufmann.
+
+Kochenderfer, M. 2015. Decision Making Under Uncer-
+tainty: Theory and Application.
+
+Koller, D.; and Parr, R. 1999. Computing Factored Value
+Functions for Policies in Structured MDPs. In IJCAI, 1332-—
+1339. Morgan Kaufmann.
+
+Kwiatkowska, M. Z.; Norman, G.; and Parker, D. 2011.
+PRISM 4.0: Verification of Probabilistic Real-Time Sys-
+tems. In CAV, volume 6806 of Lecture Notes in Computer
+Science, 585-591. Springer.
+
+Liu, H.; Wiesemann, W.; and Yue, M. 2024. An MILP-
+
+Based Solution Scheme for Factored and Robust Factored
+Markov Decision Processes. CoRR, abs/2404.02006.
+
+Mathiesen, F. B.; Haesaert, S.; and Laurenti, L. 2024. Scal-
+able control synthesis for stochastic systems via structural
+IMDP abstractions. CoRR, abs/2411.11803.
+
+McCormick, G. P. 1976. Computability of global solutions
+to factorable nonconvex programs: Part I - Convex underes-
+timating problems. Math. Program., 10(1): 147-175.
+
+Meggendorfer, T.; Weininger, M.; and Wienhdoft, P. 2024.
+What Are the Odds? Improving the foundations of Statis-
+tical Model Checking. CoRR, abs/2404.05424.
+
+Meggendorfer, T.; Weininger, M.; and Wienhdoft, P. 2025.
+Solving Robust Markov Decision Processes: Generic, Re-
+liable, Efficient. In AAAT, 26631-26641. AAAI Press.
+
+Morimoto, J.; and Atkeson, C. G. 2002. Minimax Differ-
+ential Dynamic Programming: An Application to Robust
+Biped Walking. In NIPS, 1539-1546. MIT Press.
+
+Munos, R. 2014. From Bandits to Monte-Carlo Tree Search:
+The Optimistic Principle Applied to Optimization and Plan-
+ning. Found. Trends Mach. Learn., 7(1): 1-129.
+
+Nilim, A.; and Ghaoui, L. E. 2005. Robust Control of
+Markov Decision Processes with Uncertain Transition Ma-
+trices. Oper. Res., 53(5): 780-798.
+
+Padrol, A.; and Pfeifle, J. 2010. Graph Operations and
+
+Laplacian Eigenpolytopes. In VII Jornadas de Matematica
+Discreta y Algoritmica (JMDA 2010), 505-516.
+
+Pinto, L.; Davidson, J.; Sukthankar, R.; and Gupta, A. 2017.
+Robust Adversarial Reinforcement Learning. In ICML,
+volume 70 of Proceedings of Machine Learning Research,
+2817-2826. PMLR.
+
+Puterman, M. L. 1994. Markov Decision Processes: Dis-
+crete Stochastic Dynamic Programming. Wiley Series in
+Probability and Statistics. Wiley.
+
+Raghunathan, A. U.; Cardonha, C.; Bergman, D.; and
+Nohra, C. J. 2022. Recursive McCormick Linearization of
+Multilinear Programs. CoRR, abs/2207.08955.
+
+
+
+Rudin, W. 1987. Real and Complex Analysis. McGraw-Hill,
+third edition.
+
+Ryoo, H.; and Sahinidis, N. V. 2001. Analysis of Bounds for
+Multilinear Functions. J. Glob. Optim., 19(4): 403-424.
+
+Schnitzer, Y.; Abate, A.; and Parker, D. 2025. Certifiably
+Robust Policies for Uncertain Parametric Environments. In
+TACAS (3), volume 15698 of Lecture Notes in Computer Sci-
+ence, 63-83. Springer.
+
+Schwartz, A. 1993. A Reinforcement Learning Method for
+Maximizing Undiscounted Rewards. In ICML, 298-305.
+Morgan Kaufmann.
+
+Stirling, J. 1730. Methodus Differentialis: sive Tractatus de
+Summatione et Interpolatione Serierum Infinitarum. G. Stra-
+han.
+
+Strehl, A. L. 2007. Model-Based Reinforcement Learning
+in Factored-State MDPs. In Proceedings of the IEEE Sym-
+posium on Approximate Dynamic Programming and Rein-
+forcement Learning (ADPRL), 103-110.
+
+Strehl, A. L.; Diuk, C.; and Littman, M. L. 2007. Efficient
+Structure Learning in Factored-State MDPs. In AAAI, 645-—
+650. AAAT Press.
+
+Strehl, A. L.; and Littman, M. L. 2005. A theoretical anal-
+ysis of Model-Based Interval Estimation. In JCML, volume
+119 of ACM International Conference Proceeding Series,
+856-863. ACM.
+
+Suilen, M.; Badings, T. S.; Bovy, E. M.; Parker, D.; and
+Jansen, N. 2024. Robust Markov Decision Processes: A
+Place Where AI and Formal Methods Meet. In Principles
+of Verification (3), volume 15262 of Lecture Notes in Com-
+puter Science, 126-154. Springer.
+
+Suilen, M.; Simao, T. D.; Parker, D.; and Jansen, N. 2022.
+Robust Anytime Learning of Markov Decision Processes. In
+NeurIPS.
+
+Towers, M.; Kwiatkowski, A.; Terry, J. K.; Balis, J. U.; Cola,
+G. D.; Deleu, T.; Goulao, M.; Kallinteris, A.; Krimmel, M.;
+KG, A.; Perez-Vicente, R.; Pierré, A.; Schulhoff, S.; Tai,
+J. J.; Tan, H.; and Younis, O. G. 2024. Gymnasium: A Stan-
+dard Interface for Reinforcement Learning Environments.
+CoRR, abs/2407.17032.
+
+Weissman, T.; Ordentlich, E.; Seroussi, G.; Verdi, S.; and
+Weinberger, M. J. 2003. Inequalities for the L, Deviation
+of the Empirical Distribution. Technical Report HPL-2003-
+97(R.1), Hewlett-Packard Laboratories.
+
+Wiesemann, W.; Kuhn, D.; and Rustem, B. 2013. Robust
+Markov Decision Processes. Math. Oper. Res., 38(1): 153-
+183.
+
+Wolff, E. M.; Topcu, U.; and Murray, R. M. 2012. Robust
+control of uncertain Markov Decision Processes with tem-
+poral logic specifications. In CDC. IEEE.
+
+
+A Proofs
+A.1 Proof of Theorem 1
+
+Theorem 1 (Restated). Let P = conv{P\ POMC
+Ay and Q = conv{Q™®, KY C An be polytopic
+marginal uncertainty sets. Then the corresponding inner op-
+timisation problem in Equation (9) attains its optimum at
+one of the pairwise products of the extreme distributions:
+
+{PX aQ” jisi<m, 1<j<k}.
+Proof. We define the set
+
+V = {PYM @QY |\1<i<m,1<j<k},
+
+as the set of product vertices of the two polytopic marginal
+uncertainty sets, and let S = P ® Q denote their true prod-
+uct. We first show that conv(S) C conv(V).
+
+Let P € P and Q € QO be arbitrary. Since P and Q are
+convex hulls of their respective vertices, we can write:
+
+P= s AP,
+_
+
+Q= 352%,
+j=l
+
+By bilinearity of the Kronecker product ® (Horst and Tuy
+1996; Padrol and Pfeifle 2010), we have
+
+P2Q= (S APO) @ (S 0,Q”)
+i=l j=l
+
+k
+> ri9;(PO @ Q™).
+
+1 j=1
+
+where A; > 0, S> A; = 1, and
+
+i=l
+
+k
+where 6; > 0, S° 4; =1.
+j=l
+
+3
+
+a
+
+Thus, P & Q is a convex combination of elements in Y, so
+P®Q € conv(V). Since P and Q were arbitrary, we con-
+clude:
+
+S={P8Q|PEP, QE Q}Cconv(V).
+This implies that
+conv(S) € conv(conv(V)) = conv(V).
+
+On the other hand, it is clear that V C S, since each
+P© @ Q is the outer product of points from P and Q, re-
+spectively. Therefore, conv(V) C conv(S). Putting both in-
+clusions together yields the equality of the two convex hulls:
+
+conv(S) = conv(V).
+
+Thus, conv(V) is exactly the convex enclosure of S.
+
+Since the inner optimisation problem in Equation (9) is
+linear in the transition probabilities T(s’ | s, a), its optimum
+is attained at an extreme point of conv(S). The claim fol-
+lows from the equality conv(S) = conv(V).
+
+10
+
+A.2 Proof of Theorem 2
+Theorem 2 (Restated). Let Pp(P,€1) and P,(Q, €2) be two
+Ly uncertainty sets for any 1 < p < oo. Then,
+
+Proof. The proof follows from Minkowski’s inequal-
+ity (Rudin 1987), a generalisation of the triangle inequality,
+which establishes that for any two vectors u,v € R”:
+
+lu + Ullp Sully + Helly:
+
+It suffices to show that for any distributions P,P’ € Ay,
+and Q, Q’ € An, it holds that
+
+||P’ Q!— P®Q|Ip < ||P’ — Pllp + |1Q' — Qllp-
+
+By definition,
+P'(x)Q"(y) — P(x) Q(y)
+= Q(y)[P'(x) — P(a)] + P(a)[Q"(y) — Q(y)|
+Hence,
+|P'(x)Q'(y) — P(x) Q(y) |? =|Q"(y)[P'(x) — P(2)|
+
++ P(x)[Q"(y) — Q(y)\|".
+
+Summing over (x,y), taking the p-th root, and applying
+Minkowski’s inequality gives:
+
+|P'® Q'-P®Q\|lp
+
+< (= |Q'(y)[P"(x) —
++ (>: | P(x)[Q'(y) —
+
+For the first term:
+
+12’) IP («
+=e)? So IP(@) — Pe)
+
+<> |P"(x) — Pla)’,
+
+since >7,, |Q'(y)|? < D2, Q'(y) = 1 for any p > 1. Taking
+the p-th root yields
+
+(= |Q"(y)[P() -
+
+A symmetric argument shows
+
+(= |P(x)[Q'(y) -
+
+Combining both bounds concludes the proof:
+
+||P’ Q!— P®Q|Ip < ||P’ — Pllp + |1Q' — Qllp-
+
+1/p
+Pe
+
+1/p
+aul ;
+
+— P(«)]|?
+
+1/p
+Pe < ||P’ — Pllp.
+
+1/p
+aul) < ||Q' — Qllp-
+
+
+
+B McCormick Linear Program
+We present in detail the linear-program (LP) construction
+that replaces the bilinear inner minimisation in Equation (9)
+with a convex relaxation based on McCormick envelopes,
+and show how this generalises to more than two marginal
+distributions by applying the construction recursively.
+
+B.1_ Linear Program Construction
+Recall that for two box-type marginal uncertainty sets
+
+Pp ={P=(pi,.--,.pn) € An |p, < pi < Di},
+Qn ={Q=(u,.--,au) € Am |g, <4 SG};
+
+the exact inner minimisation over all product distributions
+can be written as
+
+N M
+PePp, QEQp eee?
+
+w=1 j=1
+
+where the matrix A = (a;;) € R‘*™ contains the values
+V,,(s") of the successor states s’. Directly optimising this
+bilinear form is intractable in general. Instead, we introduce
+auxiliary variables
+hiy © Pid,
+
+for each pair (i, 7). Each h,; is then constrained by the four
+McCormick inequalities (Equations (12a)—(12d)), which to-
+gether with the box bounds on p; and q; enclose exactly the
+convex hull of each {(p;,9;,pi9;)}- Finally, to ensure that
+the auxiliaries {h,;};,; define a valid probability distribu-
+tion, we impose the coupling simplex constraint
+
+N M
+
+Soo hij = 1.
+
+i=1 j=1
+
+Putting these components together yields the following LP
+for the inner problem, which is both tractable and tight:
+
+N M
+SoS. aij hij,
+
+min
+Pogh i=1 j=1
+subject to P, S Pi S Dis 7=1,...,N,
+hij = Did, + GP; — Pid»
+hig = Pid; + 9 Pi — Pi Wj:
+hiy S Pi + GP, — PV, TY,
+hij ad, + 45 Pi — Pid;>
+
+Each pair (i, 7) contributes precisely four McCormick con-
+straints, the box constraints on p; and q; add 2N + 2M
+inequalities, and the single global simplex constraint cou-
+ples all h;;. As a result, the total number of constraints is
+ANM+2N+2M +1, growing linearly in the product sup-
+port size N - M and polynomially in the marginal supports.
+
+11
+
+B.2. Recursive McCormick Relaxation
+
+When composing n > 2 marginal box-like uncertainty sets
+{PE C Ay, }2_4, each of the form:
+
+PR = {(pis---+Ping) © Am, | DY < pt < pr},
+
+the inner minimisation becomes the multilinear program:
+
+Mn
+
+> Diy ein Tbe.
+
+in=l
+
+min
+
+PIEPh,...,
+
+We follow the standard recursive extension of the Mc-
+
+Cormick relaxation to multi-linear problems as described
+
+by Ryoo and Sahinidis (2001) and Raghunathan et al.
+(2022), which operates in three steps:
+
+Step 1: Introduce auxiliaries. For each index-tuple
+(i1,..-,%), We introduce define n — 1 auxiliary variables
+replacing each bilinear partial product:
+
+1,2 n-1 on
+Puy Pig +++ Pi, Pin
+
+=Ahn-1
+Step 2: McCormick relaxations. Each bilinear equa-
+tion h & uv (with either u = = piv = Di, oru =
+hp—1,U = pj) is relaxed by the four McCormick inequal-
+ities (Eqs. (12a)- (12d)). The upper and lower bounds for
+each auxiliary s, are obtained by simple interval arithmetic:
+(h,., hy) = (h, 1p, r—1Pi.), forr > 1.
+
+Step 3: Linking and objective.
+jective by
+
+Replace the original ob-
+. n— 1
+min y Qizenin Ng gs
+ph : : Ly-ee52n
+
+UL yee-gtn
+
+subject to:
+¢ Box constraints pe < pk < pe for all k, 7.
+
+* McCormick inequalities for each bilinear pair (u,v)
+defining every h’.
+
+¢ Global simplex constraint a ni
+
+eesdn U1 yeeeybn =1.
+Complexity. There are [[, mz index-tuples and n—1 aux-
+iliaries per tuple, yielding 4(n — 1) [],, mx McCormick in-
+equalities. Adding 2°, m, box constraints and one sim-
+plex equality gives the total number of constraints:
+
+TI)
+
+This grows linearly in the product support and exponentially
+only in the number of factors n, while it is polynomial in
+the individual support sizes, avoiding a doubly-exponential
+blow-up of vertex enumeration. Furthermore, by propagat-
+ing bounds via interval arithmetic at each step, the relaxation
+remains at least as tight as the interval-arithmetic relaxation.
+
+4(n — 1) Tp + 230m + 1€O(n
+
+k=1 k=1
+
+
+C_ Vertex Cardinality for L; and L.,
+Uncertainty Sets
+
+We demonstrate that for common classes of marginal uncer-
+tainty sets, specifically D1, LD. balls or box-type sets, the
+number of vertices can grow exponentially with the support
+size. As a result, solving the inner optimisation problem in
+Equation (9) via explicit vertex enumeration can become in-
+feasible even for moderate support dimensions.
+
+Consider an L,, uncertainty set P centred at the uniform
+nominal distribution
+
+with & even, and radius ¢ = i that is,
+P={PEAx|||P— Plo < k},
+
+which is a polytope within the k-dimensional probabil-
+ity simplex and is therefore constrained to the (k — 1)-
+dimensional hyperplane defined by 7, p; = 1.
+For each subset J C {1,...,&} with |Z| = k/2, define a
+we,
+
+distribution P! by
+1 2
+— k?
+Pi {i ier
+
+It is straightforward to verify that P’ € P for any such J,
+since these are valid probability distributions and the L.,
+constraint imposes the bounds 0 < p; < 2
+
+A point in a (& — 1)-dimensional polytope is a vertex if
+it lies at the intersection of (k — 1) independent active con-
+straints (excluding the affine simplex equality that defines
+the ambient space). At any distribution P/, there are:
+
+1. k/2 active upper bounds p; = 2 forz € I,
+2. k/2 active lower bounds p; = 0 for ¢ I.
+This gives a total of k active inequality constraints. One can
+verify that among these k coordinate-bound constraints, one
+linear combination corresponds to the simplex constraint,
+leaving exactly & — 1 linearly independent active inequal-
+ities. Therefore, each P! is indeed a vertex of P.
+
+There are (x72) such subsets I with || = &/2, and thus at
+least that many distinct vertices in P. The quantity ( ka) is
+
+known as the central binomial coefficient, and its growth can
+be accurately described using Stirling’s approximation (Stir-
+ling 1730; Flajolet and Sedgewick 2009) as
+
+(i) ©° a)
+
+Using the same construction, we can show that the Ly
+uncertainty set
+
+p={PeA,||P- Pl <1}
+also contains at least ( h/2
+I distance between any two probability distributions in A;,
+
+is 2, and ||P! — P||, = 1 for each J. Hence, this allows for
+the same type of extremal distributions constructed above.
+
+) vertices. Note that the maximum
+
+12
+
+Therefore, for both of these common classes of marginal
+uncertainty sets, explicit vertex enumeration of the result-
+ing product polytope is generally intractable, and we must
+instead rely on the relaxations introduced in Section 3.2.
+
+We remark that the examples above are not pathological
+but rather characteristic of marginal uncertainty sets repre-
+sented by L1- or L.o-norm balls. These sets induce com-
+binatorial constraints, i.e., choices of which coordinates hit
+a bound, and each such choice can give rise to a distinct
+vertex. This is a natural outcome whenever uncertainty acts
+coordinate-wise. However, we also note that the construc-
+tion above represents an extreme case. The number of ver-
+tices can be significantly smaller, for example when the
+nominal distribution lies close to a vertex of the probabil-
+ity simplex.
+
+D Overapproximating L; Balls as Boxes
+
+McCormick envelopes are constructed using upper and
+lower bounds on each component of the marginal distribu-
+tions, and thus naturally accommodate the product of box-
+type uncertainty sets derived from confidence intervals, such
+as the exact Clopper—Pearson interval (Clopper and Pear-
+son 1934) discussed in Section 4. Our experiments show
+that McCormick envelopes are effective in circumventing
+the exponential blow-up in the number of vertices when an-
+alyzing the product of such polytopes. However, they do
+not directly extend to uncertainty sets in the form of L;
+balls derived from Weissman’s inequality (Weissman et al.
+2003). One might attempt to apply McCormick envelopes
+to these L, sets by computing upper and lower bounds on
+each component of the marginal distribution under the L;
+constraint. Yet, as we show below, the tightest such bounds
+coincide precisely with those obtained from Hoeffding’s in-
+equality (Hoeffding 1994), which are known to be less tight
+than the exact Clopper—Pearson bounds.
+
+As a result, McCormick envelopes offer no practical ad-
+vantage for L, uncertainty sets, and we must instead rely on
+the radii-sum result in Theorem 2 to enable efficient com-
+putation under the product uncertainty. This is the same ap-
+proach employed by Strehl (2007) in his PAC analysis for
+model-based reinforcement learning in factored MDPs.
+
+Let P be an Lj uncertainty set defined as
+
+p={Pcd,
+
+IP’ - Pla se},
+
+centred around the nominal distribution P = (p1,---
+A., where € is given by Weissman et al. (2003) as
+
+_ = [nat =9)= me
+
+n
+
+:Ba) €
+
+P)
+
+with a denoting the support size and n the number of ob-
+served samples.
+
+For any P’ € P and for each component p’, the maximum
+possible deviation from the nominal value p; is ¢/2. This is
+because, to satisfy the DL; constraint, one can allocate at most
+€/2 of additional probability mass to a single component,
+compensated by removing ¢/2 from the others, preserving
+
+
+the total mass of 1 and ensuring that the sum of deviations
+remains bounded by e. This yields:
+
+€ i In(2¢ — 2) — In(6)
+
+2 2n
+Since the bound ¢ increases with the support size a, the
+smallest possible deviation arises in the case of a = 2 suc-
+cessors, leading to:
+€ In(2) — In(6)
+
+2 2n
+
+In (5)
+Qn’
+
+which matches the classical confidence bound for the bino-
+mial distribution derived from Hoeffding’s inequality (Ho-
+effding 1994). This bound is known to be no tighter than
+the exact confidence interval given by Clopper and Pearson
+(1934), which we use in our construction of box-type un-
+certainty sets in Section 4. Therefore, the tightest possible
+component-wise upper and lower bounds that can be derived
+from an L, constraint are never sharper than those obtained
+directly from exact confidence intervals. As a result, there
+is no practical advantage to combining L, uncertainty sets
+with McCormick envelopes.
+
+E_ Detailed Benchmark Environments
+
+We provide details on the benchmark environments em-
+ployed in our experiments and the used hyperparameters.
+For learning benchmarks, we may select separate instances
+from those used in the solution case studies, since the rf-
+MDP must be re-solved each time the sampling policy is
+updated. Specifically, whenever any factor’s sample count
+doubles (cf. Section 5), we recompute the optimal optimistic
+policy during the rollout of a total of 10° fixed-length trajec-
+tories. All our used environments and case studies are pub-
+licly available'.
+
+E.1 Aircraft Collision Avoidance
+
+The aircraft collision avoidance environment is a version of
+the family of models introduced in Kochenderfer (2015). We
+consider an NV x M grid, where two aircraft, one controlled
+by our agent and one adversarial, fly toward each other. At
+each time step, both pilots may choose to fly straight, ascend,
+or descend, with these actions succeeding independently
+with probabilities p and q, respectively. The agent’s objec-
+tive is to reach the opposite end of the grid without colliding
+with the adversarial aircraft, which manoeuvres arbitrarily.
+A collision is defined as entering a specified radius around
+the adversarial aircraft. The objective value is the probability
+of reaching the goal zone without collision. The two aircraft
+form the factors of the factored MDP, and evolve indepen-
+dently until a collision occurs. For the solving benchmarks,
+we set (N, M) = (20, 24). For the learning benchmarks, we
+employ environments with (NV, MM) = (15,15) and sample
+trajectories of fixed length / = 15.
+
+‘https://github.com/yannikschnitzer/prism/tree/umdp_
+composition
+
+13
+
+E.2 System Administrator
+
+The System Administrator (or SysAdmin) domain is a stan-
+dard benchmark in factored MDPs (Guestrin et al. 2003).
+In this setting, an administrator manages a network of N
+computers, each connected to a subset of the others. We
+consider the bidirectional ring topology, where each com-
+puter is connected to its two immediate neighbors, forming
+a closed loop. At each time step, a computer can be in one of
+two states: running or failed. The probability that a running
+computer fails depends on whether its connected machines
+are currently in the failure state. As a result, the comput-
+ers form the factors of the factored MDP, with dependencies
+only between adjacent nodes. The administrator may choose
+to repair one machine per time step, which then returns to
+the running state with high probability. The administrator re-
+ceives a reward at each step that increases with the number
+of machines currently running. The objective is to maximise
+the expected cumulative reward over a fixed time horizon T’.
+For the solving benchmarks, we consider NV = 10 machines
+with a time horizon of T’ = 15. For the learning benchmarks,
+we use J’ = 10 and sample trajectories of that length.
+
+E.3 Frozen Lake
+
+The Frozen Lake environment is a standard benchmark from
+OpenAI Gym (Towers et al. 2024). We consider an N x N
+frozen lake grid, where some cells contain holes in the ice.
+The agent can move in the four cardinal directions and aims
+to reach a designated goal cell without falling into any of
+the holes. Due to the slippery surface, there is a probability
+at each step that the agent ends up in a nearby cell rather
+than the one intended. To model this as a factored MDP, we
+extend the environment into a multi-agent setting: we intro-
+duce a second agent, and the task is now to manoeuvre both
+agents so that they each reach their goal without falling into
+a hole or colliding with each other. The two agents act as
+the factors of the factored MDP and move independently in
+the environment, except when a collision occurs. The objec-
+tive is to minimise the expected number of steps required
+for both agents to reach their respective goal cells. For the
+solving benchmarks we use a grid of N = 15 size, whereas
+for the learning benchmarks we use N = 8, and we sample
+trajectories of fixed length / = 100.
+
+E.4 Stock Trading
+
+The stock-trading domain (Strehl, Diuk, and Littman 2007)
+simulates a stock market with N economic sectors, each
+containing M/ individual stocks. At each time step, the agent
+can choose to buy or sell an entire sector, thereby either own-
+ing or not owning all the stocks within that sector in the next
+step. Stocks can at each step be rising or falling. The prob-
+ability that a stock rises depends on whether other stocks in
+the same sector were rising in the previous time step. As a
+result, the sectors form the factors of the factored MDP and
+evolve independently from one another. The agent receives a
+positive reward for each rising stock it owns, and a negative
+reward for each owned stock that falls. No reward is gained
+or lost from stocks in sectors the agent does not own. The
+objective is to maximise the cumulative reward over a fixed
+
+
+time horizon T’. For the solving benchmarks, we use N = 3
+sectors with M = 2 stocks each and T' = 20. For the learn-
+ing benchmarks, we set N = 2, M = 2, and T = 10. We
+sample trajectories for the full time horizon length | = 10.
+
+E.5 Drone Delivery
+
+The drone delivery problem (Badings et al. 2022; Schnitzer,
+Abate, and Parker 2025) is a multi-agent factored MDP in
+which N autonomous drones navigate a shared 3D environ-
+ment to deliver payloads to a designated target zone while
+avoiding both static obstacles and each other. At each time
+step, every drone may choose one of six actions: move north,
+south, east, west, ascend, or descend. Due to wind, the dy-
+namics are subject to stochastic disturbances and the drone
+may drift. Each drone 2 constitutes a factor in the factored
+MDP: its local state is its (2, y, z) coordinate, and its tran-
+sition kernel depends only on its own current state and cho-
+sen action. The objective value is the probability of safely
+reaching the target zone without crashing, over an infinite
+time horizon. We consider a version with N = 2 drones
+as the state factors. For the solving benchmarks we use an
+8 x 8 x 8 environment, and for the learning benchmarks we
+use dimensions 5 x 5 x 5 and learn from sampled trajectories
+of length / = 50.
+
+E.6 Herman’s Self-Stabilising Protocol
+
+The Herman self-stabilising protocol (Herman 1990) is
+a randomised synchronous algorithm for achieving self-
+stabilisation in a unidirectional token-ring of N identical
+processes. Each process 2 maintains a Boolean variable x; €
+{0, 1}, and initially an arbitrary (odd) number of tokens may
+be present, each token being indicated by a process having
+the same bit as its counterclockwise neighbour. At each time
+step, every process that holds a token (i.e. 7; = x;_1) flips
+its bit with probability r € (0,1) (thereby passing the token
+clockwise) and retains its bit with probability 1 — r. Pro-
+cesses without a token keep their bit unchanged. If a process
+retains its token and simultaneously receives another token
+from its neighbour, both tokens annihilate. We model this as
+a factored MDP. The global state factorises over the N pro-
+cesses, each of which evolves conditionally on its own bit
+and that of its counter-clockwise neighbour. The processes
+are stable when a single token is present, the objective value
+is the expected number of steps until stabilisation is attained.
+We consider a version with N = 11 parallel processes.
+
+E.7 Chain
+The chain benchmark (Araya-Lopez et al. 2011) comprises
+N independent chains, each with states {1,..., 4}, con-
+
+stituting the factors. At every time step, a chain in state
+a < M — 1 either advances to 2 + 1 with probability p or
+resets to state | with probability 1 — p. From the penulti-
+mate state / — 1, it either moves to the terminal state J/ or,
+upon failure, falls back uniformly to one of the earlier states
+{1,..., M4 — 2}. Once a chain reaches state M, it remains
+there indefinitely. The objective is the expected number of
+steps for all chains to reach the final state 1/7. In our ex-
+periments, we consider a version with N = 2 chains and
+M = 10 states per chain.
+
+14
+
+F Extended Experiments
+
+In the following, we provide extended results for both solv-
+ing robust factored MDPs and learning robust policies. All
+experiments were performed on an Intel Xeon Gold (2.50
+GHz, 40 cores) with 128 GB of RAM.
+
+Solving rf-MDPs_ Table 2 presents solving benchmarks
+across varying L., uncertainty radii € around a nominal
+transition kernel, extending Section 5, which focused on
+€ = 0.025. As € increases, the relative gap between the exact
+rf-MDP solution (via vertex enumeration) and the interval-
+arithmetic relaxation can rise significantly, up to 900% in
+the most extreme of the considered cases, highlighting the
+growing conservatism of the interval-arithmetic relaxation.
+In contrast, the McCormick relaxation remains exact for all
+tested radii, demonstrating its tightness even under elevated
+epistemic uncertainty.
+
+Robust Policy Learning Figure 4 displays results for all
+learning benchmarks, including the Stock Trading domain
+omitted from Figure 3. Note that, in the Frozen Lake do-
+main, the agent aims to minimise the objective, so the y-axis
+is inverted to reflect better performance at lower values. For
+each method and domain, we also report the total runtime
+required to sample and process trajectories. This runtime
+accounts for (i) sampling trajectories, (ii) recomputing the
+optimistic sampling policy, by solving the current rf-MDP
+under the most favorable environment policy, (iii) synthe-
+sising the optimal robust policy, and (iv) evaluating its per-
+formance on the hidden true MDP. Across all domains and
+methods, runtimes remain comparable, showing that the su-
+perior tightness of McCormick relaxations incurs negligible
+computational overhead.
+
+We do not include the Chain and Herman domains in the
+learning benchmarks. These MDPs offer only a single ac-
+tion per state and evolve purely stochastically, making them
+unsuitable for exploration and policy improvement, though
+they remain instructive for solution-quality evaluation.
+
+In Table 3, we explicitly compare the sample efficiency
+and runtimes of the different methods by showing how many
+fixed-length trajectories each method requires to achieve the
+performance guarantee attained by the slowest method af-
+ter processing the full set of 10° trajectories. In our ex-
+periments, the slowest method was always the flat MDP
+learner that does not exploit the factored structure. The re-
+sults demonstrate that factored learning with the McCormick
+relaxation is significantly more sample-efficient than the
+other methods, requiring orders of magnitude fewer sam-
+ples than flat and L1-based learning, and typically less than
+half the number of samples needed compared to using the
+interval-arithmetic relaxation. However, the runtimes remain
+comparable, although the interval-arithmetic relaxation, can
+be solved very efficiently using bisection techniques. This is
+due to the substantially reduced sample requirements.
+
+
+SI
+
+. Vertex Enumeration Interval-Arithmetic McCormick
+Domain [S| |T'| €
+Robust Value Time [s] | Robust Value Rel.Gap Time [s] | Robust Value Rel.Gap _ Time [s]
+0.01 0.85 2673.7 0.83 3% 53 0.85 0% 45.2
+0.02 0.77 3095.0 0.71 7% 5.2 0.77 0% 45.4
+0.025 0.73 2535.8 0.65 11% 6.1 0.73 0% 43.7
+Aircraft (1) HIIS3 1262099 9) 03 0.68 2568.9 0.57 15% 44 0.68 0% 413
+0.04 0.56 1642.1 0.42 25% 5.3 0.56 0% 42.2
+0.1 0.04 1011.1 0.004 900% 43 0.04 0% 45.5
+0.01 266.45 106.1 299.11 12% 0.5 266.45 0% 51
+0.02 308.00 699.5 392.14 27% 0.6 308.00 0% 7.0
+0.025 | 331.34 778.1 451.28 36% 0.6 331.34 0% 7.6
+Chain (1) 100 3136 9.03 356.66 746.8 521.27 16% 0.7 356.66 0% 7.8
+0.04 413.98 1054.5 703.70 70% 1.0 413.98 0% 9.7
+0.1 1019.70 5172.9 6355.96 523% 48 1019.70 0% 26.0
+0.01 0.72 198.0 0.70 3% 166.9 0.72 0% 124.6
+0.02 0.70 1913.8 0.65 7% 104.7 0.70 0% 202.6
+0.025 0.69 2125.8 0.63 9% 90.2 0.69 0% 190.7
+Drone () 262144 21694720 43 0.68 2269.7 0.60 11% 92.8 0.68 0% 196.0
+0.04 0.66 2353.6 0.55 16% 94.7 0.66 0% 195.3
+0.1 0.51 599.0 0.24 53% 183.1 0.51 0% 197.9
+0.01 18.13 9.3 19.10 5% 25 18.13 0% 8.0
+0.02 19.74 10.3 22.06 12% 2.7 19.74 0% 74
+0.025 20.64 11.0 23.89 15% 2.8 20.64 0% 8.1
+Herman (1) 2048 1771489) 93 21.61 114 25.82 20% 3.3 21.61 0% 8.9
+0.04 23.78 12.4 30.66 29% 3.8 23.78 0% 9.0
+0.1 48.73 24.7 124.21 155% 11.8 48.73 0% 19.2
+0.01 194.58 83.5 202.49 1% 56.1 194.58 0% 55.6
+0.02 208.29 1023.3 227.19 9% 66.0 208.29 0% 100.8
+0.025] 216.01 1018.4 242.05 12% 67.7 216.01 0% 105.9
+Frozen Lake (J) 50625 1866556 gs 224.41 1082.9 259.12 15% 77.6 224.41 0% 113.3
+0.04 243.60 1218.9 302.35 24% 99.8 243.60 0% 130.5
+0.1 520.80 1687.3 2797.57 437% 1282.7 520.80 0% 316.3
+0.01 30.44 34.8 26.42 13% 16.8 30.44 0% 35.4
+0.02 27.02 66.5 20.23 25% 14.9 27.02 0% 64.3
+0.025 25.43 67.6 17.60 31% 16.0 25.43 0% 67.5
+Stock Trading (f) 12481 5362624) 0, 23.91 66.0 15.22 36% 17.5 23.91 0% 64.6
+0.04 21.13 65.0 11.17 47% 17.4 21.13 0% 67.3
+0.1 8.81 101.5 1.91 78% 13.2 8.81 0% 104.6
+0.01 54.66 68.4 52.77 3% 38.9 54.66 0% 67.5
+0.02 51.94 68.5 48.49 7% 33.3 51.94 0% 66.0
+0.025 50.70 66.7 46.66 8% 34.1 50.70 0% 64.1
+SysAdmin (ft) 15873 9332587 93 49.54 65.7 44.98 9% 34.5 49.54 0% 66.0
+0.04 47.43 66.7 42.11 11% 34.3 47.43 0% 63.8
+0.1 39.66 59.2 33.02 17% 31.6 39.66 0% 59.7
+
+Table 2: Extended results for solution benchmarks. Arrows ({/{) indicate optimisation directions. |S| and |T'| denote the number of states and transitions, and ¢ is
+the added L., uncertainty radius. The relative gap is |Vvz — Ve|/Vr, where Vvg and Vp are the robust results from vertex enumeration and relaxations.
+
+
+=== McCormick
+
+0.6
+
+=== Interval-Arithmetic
+
+=== Flat Learning
+
+=== Nominal == = Robust
+
+gos
+Ss
+>
+0.2
+10! 10? 10° 104 10° 10° 10° 107 10° 104 10° 10° 10! 10? 10° 10°
+Episode Episode Episode
+103 |
+@ ® 108 BS,
+ez ez Zoek
+© al o o
+gE" & £
+r= 10 r=
+5 = 5 10lk
+oh 4 4
+3 2 10 3
+fo) fo} fo)
+& & & 10°
+OL
+10 i i i i Hl Hl 10! bet Ze su HEFT aan ORE ET Haft ae Hl 1 1 L L L
+10! 107 10° 104 10° 10° 10° 10! 10? 10° 104 10° 10° 10! 10? 103 107 10° 10°
+Episode Episode Episode
+(a) Aircraft (b) Frozen Lake (c) Stock Trading
+40-
+2
+S30h
+206
+7 0.0 i i n i 1 n
+10! 102 108 104 10° 10°
+Episode Episode
+10°
+~ ~
+S 104 pat
+> > 10
+& &
+‘g a3
+s 1036 s 10:
+m4 m4 5
+= 10
+© 107 & }
+B B 10!
+10! 10? 105 107 10° 10° 10! 10? 10° 104 10° 10°
+Episode Episode
+(d) SysAdmin (e) Drone
+
+Figure 4: Extended results for robust policy learning. For each benchmark, the upper plots compare performance and guarantees,
+and the lower plots show the total runtimes of each method.
+
+D : | Flat Learning Ty Interval-Arithmetic McCormick
+omain Guarantee
+| Time(s) Samples | Time(s) Samples | Time(s) Samples | Time(s) Samples
+Aircraft 0.50 872 10° 200 3-10° 130 10° 290 6-104
+Frozen Lake 72.84 9591 10° 6198 1.2. 105 4406 3.6 - 104 3318 1.6 - 104
+Stock Trading 3.90 493 10° 237 5.5- 10° 142 1.5-10° 85 7-104
+SysAdmin 35.34 51634 10° 14484 7.5-10° 2521 4.5 - 104 3108 1.3- 104
+Drone 0.07 123357 10° 8259 9.6 - 10% 24416 2.1- 104 2555 1.3- 10°
+
+Table 3: Comparison of sample efficiency and runtime across methods required to reach the guarantee achieved by the slowest
+method after processing the full set of trajectories.
+
+16

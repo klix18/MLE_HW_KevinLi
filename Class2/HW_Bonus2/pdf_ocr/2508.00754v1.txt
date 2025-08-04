@@ -1,0 +1,842 @@
+2508 .00754v1 [cs.LG] 1 Aug 2025
+
+arXiv
+
+A Simple and Effective Method for Uncertainty
+Quantification and OOD Detection
+
+Yaxin Ma
+Electrical and Computer Engineering
+University of Florida
+Gainesville, USA
+yaxinma@ufl.edu
+
+Abstract—Bayesian neural networks and deep ensemble meth-
+ods have been proposed for uncertainty quantification; however,
+they are computationally intensive and require large storage. By
+utilizing a single deterministic model, we can solve the above
+issue. We propose an effective method based on feature space
+density to quantify uncertainty for distributional shifts and out-
+of-distribution (OOD) detection. Specifically, we leverage the
+information potential field derived from kernel density estimation
+to approximate the feature space density of the training set.
+By comparing this density with the feature space representation
+of test samples, we can effectively determine whether a distri-
+butional shift has occurred. Experiments were conducted on a
+2D synthetic dataset (Two Moons and Three Spirals) as well
+as an OOD detection task (CIFAR-10 vs. SVHN). The results
+demonstrate that our method outperforms baseline models.
+
+Index Terms—uncertainty quantification, distributional shift,
+OOD detection
+
+I. INTRODUCTION
+
+Deep learning has demonstrated success in numerous appli-
+cations such as computer vision, natural language processing,
+etc (3). However, one significant issue with deep
+learning is its tendency to produce overconfident predictions.
+In highly sensitive applications such as autonomous driving or
+medical-related fields (5). the consequences of prediction
+errors can be severe, as these areas are directly linked to human
+safety and well-being. As a result, uncertainty quantification
+has emerged as a critical and indispensable area of research
+to address these challenges effectively [6 (7) [8}.
+
+In general, uncertainty can be categorized into two main
+types: data uncertainty and model uncertainty (9) (10). Data
+uncertainty arises from the inherent randomness or noise in
+the data and cannot be reduced through the training process.
+Model uncertainty, also known as epistemic uncertainty, is
+caused by uncertainty in the model’s parameters and archi-
+tecture, reflecting the limitations in the model’s knowledge
+or learning capability (11). One type of uncertainty called
+distributional uncertainty occurs when the distributions of
+the training set and test set differ. Recently, distributional
+uncertainty has been tackled by using the model activations
+to simplify the estimation [12].
+
+To quantify uncertainty in the context of distribution shift,
+there are two primary applications: active learning [13]
+and out-of-distribution (OOD) detection [17]. Active
+
+Benjamin Colburn
+Electrical and Computer Engineering
+University of Florida
+Gainesville, USA
+benjamin.colburn @ufl.edu
+
+Jose C. Principe
+Electrical and Computer Engineering
+University of Florida
+Gainesville, USA
+principe @cnel.ufl.edu
+
+learning selectively chooses the most informative training data
+and directs data acquisition toward regions of high uncertainty,
+thereby minimizing the need for excessive labeled data while
+preserving model accuracy. For OOD detection, the goal is
+to identify test samples whose distribution differ from the
+training set. For example, if the training data consists of the
+MNIST dataset, which contains only digit images, and the
+test data includes samples from the Fashion MNIST dataset,
+which contains images of clothing, the model, regardless of
+how well it is trained, cannot provide correct predictions for
+such samples. In such cases, OOD detection can identify these
+test samples as out-of-distribution instances.
+
+Typically, from the perspective of deep learning, the model
+is trained through optimization, resulting in a fixed set of
+parameters being selected. In contrast, from a probabilistic
+viewpoint, Bayesian model averaging considers all possible
+parameter sets, weighted by their posterior probability (18).
+Bayesian methods utilize Bayes’ theorem to update beliefs
+about a neural network’s parameters based on observed data.
+However, directly computing the posterior distribution is often
+infeasible due to the complexity of neural networks. As
+a result, researchers have developed various techniques to
+approximate this posterior distribution [21]. Monte
+Carlo (MC) Dropout provides a practical approach to approx-
+imate Bayesian inference by applying different dropout masks
+during inference and performing multiple stochastic forward
+passes (22). But it has limited uncertainty representation and
+computational drawbacks.
+
+The ensemble method is another approach for comple-
+menting the model output with uncertainty estimation (23).
+It estimates the variance among model outputs as an indicator
+of uncertainty. However, both Bayesian and ensemble methods
+demand large computational resources for training. Addition-
+ally, ensemble methods require more storage to accommodate
+the parameters of multiple models.
+
+To address this issue, researchers have proposed using
+deterministic methods with a single model for uncertainty
+quantification [25]. By utilizing one model, deep de-
+terministic method try to learn the latent representation of
+a model or apply a distance-sensitive function to estimate
+
+predictive uncertainty [26] [27] 28]. For example, determinis-
+tic uncertainty quantification (DUQ) measures uncertainty by
+
+
+computing the distance between the model output and the clos-
+est class centroid using an RBF network and gradient penalty
+(29). Spectral-normalized Neural Gaussian Process (SNGP)
+enhances distance-awareness by applying weight normaliza-
+tion and replacing the output layer with a Gaussian Process
+30]. Deep Deterministic Uncertainty (DDU) approximates the
+class-conditional distribution using a Gaussian Mixture Model
+and quantifies uncertainty through log-likelihood estimation
+Bi}.
+
+However, these methods rely on specific assumptions which
+may not always hold in real-world scenarios, potentially
+limiting their flexibility. DDU assumes that the features of
+each class follow a Gaussian distribution, which will not
+accurately represent more complex feature spaces. In our
+proposed method, we leverage the Information Potential Field
+(IPF), a non parametric estimator of the probability density
+function, to estimate the density of sample projections in
+feature space without imposing such assumptions. The IPF
+will quantify the density of the training set which is the in-
+distribution (iD) data, while the OOD data are the test set
+samples. Furthermore, unlike DDU, our approach does not
+require treating each class separately; instead, we compute the
+feature space density directly across all classes. This results in
+a simpler and more generalized approach, making it applicable
+to a wider range of scenarios while maintaining robustness and
+accuracy.
+
+We conduct experiments on two 2D synthetic datasets:
+the two-moons and three-spirals datasets. We are the first
+to use the three-spirals dataset for visualizing uncertainty
+performance, as the commonly used two-moons dataset is
+too simplistic. Additionally, our experimental results on OOD
+detection using the CIFAR-10 and SVHN datasets highlight
+the superiority of the proposed method.
+
+II. METHOD
+A. Problem Formulation
+
+In classification tasks, the underlying assumption is that the
+distribution of the training set is the same as the distribution of
+the test set. However, in practical applications, the training set
+distribution may differ from the test set distribution, resulting
+in a distributional shift. If a test sample shares the same
+distribution as the training set, it is referred to as in-distribution
+(i-D) data. Conversely, if the test sample comes from a
+distribution different from the training data, it is classified as
+OOD data. In such cases, the prediction for the test sample
+carries a high degree of uncertainty, known as distributional
+uncertainty [33].
+
+Following this definition, density-based and distance-based
+methods have been proposed to measure uncertainty
+[35]. Specifically, if a test point is located in a high-
+density region of the training data, or if its distance to the
+training data is small, the test point is considered to have low
+uncertainty. Conversely, if the test point lies in a low-density
+region or is far from the training data, it is deemed to have
+high uncertainty, as it represents unseen data.
+
+B. Distance Awareness Representation
+
+For most large datasets, the data space is high dimension
+and very complex, making it challenging to measure density
+or distance directly in the raw data space. Neural network
+models are an efficient approach to extract features. These
+latent features can be directly used as representations of data,
+and normally they exist in a lower dimensional space. The
+activations of the neural network layer before the classification
+layer, is normally used as the projected data. Therefore, it will
+be easier to use the feature space density or feature space
+distance for uncertainty quantification.
+
+In fact, the features learned by the model are not guaranteed
+to capture sufficient variability or distinguishability within the
+input data. As a result, it becomes difficult to differentiate
+between iD and OOD data. For instance, features extracted
+from OOD data may be mapped into the same regions of the
+feature space as those learned from iD data. This phenomenon,
+known as feature collapse [36], undermines the effectiveness
+of using latent features to measure the distance or density of
+a test sample relative to the training set.
+
+Therefore, we utilize the bi-Lipschitz constant to improve
+the quality of the the features during model training as
+suggested in [30]. For inputs x; and x2,
+
+Lier — cally < |lfo (v1) — fo (wa)|lz <U llr — ally,
+
+(1)
+where L and U are constants representing the lower and upper
+bounds, respectively. The function f9(-) represents the neural
+network model. ||-||,, and ||-||, denote the distances in the
+sample space and feature space, respectively.
+
+During model training, we employ Spectral Normalization
+(SN) to enforce the bi-Lipschitz constraint to improve the
+model’s ability to maps distinct inputs to distinct representa-
+tions.
+
+C. Informational Potential Field
+
+Let Drain and Dtest represent the training set and test set, re-
+spectively. The training set consists of samples (2, y;), where
+x; € ¥ and y; € Y, X and Y denote the sample space and
+label space. . Similarly, the test set is represented as (x7, y7).
+Let fo(x) denote a neural network model parameterized by
+6, trained on Dain. We define z € Z as the latent feature
+representation, where Z denotes the latent feature space. For a
+sample x € ¥, the model maps ~ to a latent feature z = f(z).
+
+Let p(z) denote the feature space density of the projected
+samples at the top layer (before the classification layer) of the
+trained model. To estimate the probability density function of
+the model activations, we employ the information potential
+field to approximate p(z), yielding w(z) ~ p(z). The concept
+of IPF was introduced in and is inspired by kernel density
+estimation. It serves as the equivalent of a probability measure
+in a Reproducing Kernel Hilbert Space (RKHS). Here IPF
+quantifies the density of in-distribution projected data, forming
+a field analogous to a gravitational field in physics. Unlike
+the DDU method, which assumes the feature space density
+of the training set follows a Gaussian mixture model, our
+
+
+2 1 oO 1 2 3
+
+(a) Two-Moons dataset
+
+1 ° 3 2
+
+(d) IPF-without SN (Ours)
+
+2 3
+
+“(e) IPF (Ours)
+
+0
+
+"(i IPF-without SN (Ours)
+
+3
+
+2
+
+2 3
+
+(0) Three-Spirals dataset  (j) IPF (Ours)
+
+Fig. 1. Uncertainty results of different baseline methods on the Two-Moons dataset and Three-Spirals dataset. The first row corresponds to the Two-Moons
+dataset, and the second row represents the Three-Spirals dataset. DUQ and DDU were selected as baseline methods, and the effect of spectral normalization
+(SN) was analyzed. The blue region indicates high uncertainty, while the yellow region represents low uncertainty. Ideally, low uncertainty is expected in
+regions covered by the training data, and high uncertainty in areas outside these regions. For the Two-Moons dataset, the IPF method clearly depicts the
+central uncertainty region where no training data are present compared to DUQ and DDU. For the Three-Spirals dataset, the IPF method demonstrates a
+
+precise and interpretable uncertainty region that aligns closely with the training data.
+
+approach does not impose any assumptions on the feature
+space distribution. Furthermore, our method does not require
+consideration of individual classes when estimating the feature
+space density.
+
+The IPF provides a density field expressed as:
+
+1 N
+2) =F GE - 4) (2)
+
+where G' is a Gaussian kernel, z is the point of interest in the
+test feature space, and z; represents the points in the training
+feature space, irrespective of their class labels. N denotes the
+number of samples in the training set.
+
+The field represents the sum of Gaussian functions cen-
+tered at each training sample, providing an estimation of
+the probability distribution. When a point in the information
+potential field has a high value, it indicates greater information,
+corresponding to a high feature space density. Consequently,
+the uncertainty at that point is low. In contrast, a low value
+at a point in the field signifies a low feature space density,
+providing insufficient information, which results in high un-
+certainty.
+
+In our case the data is a vector of size given by the
+dimensionality of the top layer of the neural network. So, we
+employ the isotropic Gaussian kernel:
+
+— g.||2
+k (z,2:) = exp (-4 =") (3)
+
+Here, A is the kernel width, controlling the scale of the
+Gaussian function. By adjusting h, we can fine-tune the
+sensitivity of the model for OOD detection.
+
+We present the algorithm description in Algorithm 1.
+
+Algorithm 1 Information Potential Field
+
+Input: (;,y;) in Dirain, i = 1---N,(a*,y*) in Deest
+1: Train the neural network model fg(x) using Dain
+2: Compute the feature representations for the training set:
+
+z= fo(x)
+3: Compute the feature representation for the test sample:
+2* = fo(x*)
+
+4: Compute the Information Potential Field (IPF): w(z*) =
+W oer G(z* — 21)
+: if ¢(z*) is low (low density) then
+return Out-of-Distribution
+else
+return In-Distribution
+: end if
+
+err ann
+
+Il]. EXPERIMENT
+
+In this section, we first demonstrate the performance of our
+method on a synthetic 2D dataset and examine the appropri-
+ateness of the IPF for OOD detection, and the influence of
+different kernel sizes. Latter, we also present OOD detection
+performance and validation with other baseline methods in
+CIFAR-10 as the in-distribution dataset and SVHN as OOD
+dataset.
+
+A. Dataset
+
+The Two-Moon Dataset is a synthetic dataset consisting of
+two interlocking half-circle shapes (moons), where each moon
+represents a different class. For visualization purposes, we set
+the x-axis range from -2.5 to 3.5 with 100 values and the
+y-axis range from -3 to 3 with 100 values.
+
+The Three-Spiral Dataset is another synthetic dataset. It
+contains three intertwined spirals, each representing a different
+
+
+kernel size = 0.2
+
+kernel size = 0.2
+
+kernel size = 0.3
+
+kernel size = 0.3
+
+kernel size = 0.4 kernel size = 0.5
+
+kernel size = 0.4 kernel size = 0.5
+
+Fig. 2. Uncertainty results on the Two-Moons and Three-spirals dataset based on different kernel size. The first row corresponds to the Two-Moons dataset,
+and the second row represents the Three-Spirals dataset. Kernel sizes of 0.2, 0.3, 0.4, and 0.5 were applied during the analysis.
+
+class. For visualization, we use the same range and number of
+values as the Two-Moon Dataset.
+
+The CIFAR-10 Dataset is a widely used benchmark for
+image classification algorithms. It consists of 60,000 color im-
+ages, each sized 32x32, categorized into 10 classes, with 6,000
+images per class. The classes include: Airplane, Automobile,
+Bird, Cat, Deer, Dog, Frog, Horse, Ship, and Truck [38}.
+
+The SVHN (Street View House Numbers) Dataset is a
+real-world image dataset designed for digit recognition tasks.
+It comprises over 600,000 32x32 RGB images of house
+numbers, extracted from Google Street View imagery (39).
+
+B. 2D synthetic data - two moons, three spirals
+
+Our method was initially evaluated using the two moons
+benchmark dataset, where 2,000 samples per class were gener-
+ated with a Gaussian noise standard deviation of 0.1. To further
+demonstrate the effectiveness of the IPF method, a new three-
+class spiral dataset was employed, consisting of 1,200 samples
+for each class with a Gaussian noise level of 0.08.
+
+We compared our method against DUQ and DDU
+(31). both of which use feature space density or feature
+space distance to quantify uncertainty. Following (31).
+the model architecture consisted of a four-hidden-layer neural
+network with residual connections, where each layer had 128
+neurons. We used the top 128 layer activations in our study.
+The model was trained for 300 epochs using SGD as the
+optimizer. We use the same model for both the two-moons
+and three-spirals dataset.
+
+The hyper parameter in the IPF method is the kernel
+size, which has to be determined from data either using the
+Silverman’s rule of thumb or using cross validation. In
+our tests we employed a range of kernels between 0.1 to 1
+and the best kernel size we select is 0.3.
+
+Fig. [I] shows the distributional uncertainty for both the two
+moons dataset and the three spirals dataset. Ideally, we expect
+low uncertainty in regions covered by training data and high
+uncertainty outside these regions. For the two moons dataset,
+
+a noticeable gap exists in the central region where no training
+data is located. Compared to DUQ and DDU, our method
+distinctly highlights this area with a clear and distinguishable
+blue region, indicating high uncertainty due to the absence
+of training data. Compared with DUQ, our method presents
+a cleaner, more concise uncertainty region without covering
+areas where no data exists. This results in a more precise and
+interpretable shape.
+
+For the three spirals dataset, the DUQ method provides a
+rough estimation of uncertainty, while DDU struggles with this
+dataset due to its Gaussian prior assumption for each class.
+In contrast, our method produces better results, accurately
+aligning uncertainty regions with the shape of the training data,
+demonstrating superior performance.
+
+The impact of spectral normalization on the proposed
+method is also evaluated. The second-to-last column in Fig.
+[I] represents our method without SN, while the last column
+shows our method with SN. It is evident that incorporat-
+ing spectral normalization leads to significant improvements,
+demonstrating that the proposed method, which integrates IPF
+with spectral normalization, is highly effective for uncertainty
+quantification.
+
+We also conducted experiments to assess the impact of dif-
+ferent Gaussian kernel sizes on uncertainty quantification. Fig.
+[2] presents the results obtained with kernel sizes of 0.2, 0.3,
+0.4, and 0.5. Adjusting the kernel size allows effective control
+over the model’s sensitivity and tolerance to uncertainty. This
+highlights the flexibility and adaptability of our method.
+
+C. OOD detection
+
+We employ the CIFAR-10 dataset as the in-distribution (iD)
+data to train the model, and its performance is evaluated using
+classification accuracy and the Expected Calibration Error
+(ECE) (41). The SVHN dataset is chosen as OOD data due
+to its distribution significantly differs from that of CIFAR-
+10. During the inference phase, both iD and OOD data are
+selected as the test set. After extracting the test set features
+
+
+TABLE I
+OOD DETECTION RESULTS OF DIFFERENT BASELINES FOR WIDE-RESNET-28-10 ON CIFAR-10
+
+Method Accuracy (+) ECE (|) AUROC (SVHN as OOD)(*+)
+Softmax 93.18 £ 0.009 | 0.031 + 0.010 85.65 + 0.013
+94.80 + 0.001 | 0.007 + 0.001 91.95 £ 0.015
+93.85 + 0.002 | 0.048 + 0.010 92.43 + 0.005
+93.15 + 0.009 | 0.030 + 0.010 92.90 + 0.016
+Our method (IPF) | 93.38 + 0.008 | 0.028 + 0.008 93.18 + 0.006
+
+2 4 3 I 2
+(a) Two-Moons dataset
+
+(b) IPF on data space
+
+(c) Three-Spirals dataset
+
+24 ° i 2
+(d) IPF on data space
+
+Fig. 3. Uncertainty results for the Two-Moons dataset and Three-Spirals
+dataset using IPF directly applied in the data space.
+
+from the trained model, we apply the proposed IPF method
+to quantify uncertainty. For each test sample, if it is located
+in a high-density region of the feature space corresponding to
+the iD data, it indicates low uncertainty and is classified as
+iD data. Conversely, if the test sample has a very low feature
+space density value relative to the training data, it indicates
+high uncertainty and is classified as OOD data.
+
+To evaluate the model’s OOD detection performance, we
+treat OOD detection as a binary classification task, where iD
+data represents one class and OOD data represents the other.
+The Area Under the Receiver Operating Characteristic curve
+(AUROC) is used as the evaluation metric.
+
+The proposed method was compared against several popular
+baselines for uncertainty quantification, such as softmax, en-
+semble, DUQ, and DDU. The softmax entropy of a standard
+deep neural network was chosen as a simple baseline. For
+the ensemble method, we configured it to consist of five
+models with the same architecture but trained using different
+parameters.
+
+For our training model, we employed the Wide ResNet-28-
+10 architecture [43], where the numbers 28 and 10 denote
+the model’s depth and width, respectively. We utilized the
+layer preceding the final fully connected layer as the feature
+embedding, with a feature dimension of 640. To determine
+the optimal kernel width, we performed cross-validation over
+the range [0.01, 1], selecting the value that maximized the
+AUROC score. The best kernel width selected was 0.35. To
+ensure consistent and reliable results, each experiment was
+
+conducted five times. The outcomes were then averaged, and
+the standard deviation was computed to assess variability. Our
+experiments were conducted using the PyTorch framework and
+executed on four NVIDIA A6000 GPUs. The training was
+conducted for 350 epochs, with SGD as the optimizer. The
+learning rate was initialized at 0.01 with a decay schedule,
+and the batch size was set to 1,024.
+
+The comparison results of different baselines with IPF
+method are presented in Table 1. Note that in our evaluation,
+AUROC serves as the metric for assessing OOD detection
+performance. As shown in the table, our method achieves a
+higher AUROC score, clearly demonstrating superior perfor-
+mance of the proposed IPF approach. Additionally, the IPF
+method is much simpler to apply since it does not require the
+presentation of each class individually. We were surprised with
+the quality of the Parzen estimator for the size of the layers,
+which means that more advanced IPF estimators will improve
+the results even further.
+
+D. IPF in the Input Space
+
+We also evaluate the proposed IPF method applied directly
+to the data space. Specifically, instead of using a neural
+network to obtain embeddings, we approximate the density
+of the training set directly from the raw data and evaluate
+the test samples within this density. As shown in Fig.
+it is evident that applying IPF in the data space achieves
+results comparable to those in the feature space, provided
+the dimensionality of the data space is small. Additionally,
+we conducted experiments using the IPF method on the
+CIFAR-10/SVHN dataset, but the performance significantly
+dropped compared to IPF in the feature space, which was
+expected because of the data dimension. Note that in this
+case the dimensionality of the data space is huge (32x32) so
+the IPF computed with radially symmetric Gaussians, which
+corresponds to the Parzen window method is not appropriate.
+
+IV. DISCUSSION AND CONCLUSION
+
+From the above experiment, the proposed IPF method can
+be directly applied to the data space if the dimensionality
+is not too high. This can speed up tremendously the OOD
+detection. However, for image datasets like CIFAR-10, we are
+unable to achieve results comparable to those obtained in the
+feature space. Neural network models provide an efficient way
+to extract high-level features, reducing the dimensionality and
+making these features easier to process further. We show that
+
+
+the IPF can improve state of the art results for OOD detec-
+tion. However, using features extracted from neural network
+models introduces a mixture of distributional and epistemic
+uncertainty. This is because the process of model training
+and embedding extraction inherently involves epistemic uncer-
+tainty related to the model parameters, which complicates the
+problem. Future studies on quantifying distributional uncer-
+tainty should focus more on data-centric approaches and aim
+to minimize the impact of uncertainty introduced by model
+training.
+
+The difficulties of the IPF estimation were expected because
+for probability density function estimation in high-dimensional
+data, Parzen estimation does not scale well, and in practice it
+should not be used above 20 dimensions (37). In our current
+work, we use the isotropic Gaussian kernel estimator due to its
+simplicity and as part of our preliminary investigation. There
+are more advanced methods that extend probability density
+estimation up to 500 dimensions [45] [46]. Incorporating
+these advanced methods willl be pursued in future research
+because they could, on one hand, enable more accurate density
+approximation in the feature space and, on the other hand,
+potentially allow IPF to be applied directly in the data space on
+image datasets. This would eliminate the epistemic uncertainty
+introduced during model training and simplify the challenges
+of distributional uncertainty and OOD detection.
+
+In summary, we have developed an effective approach for
+quantifying uncertainty in distributional shifts for OOD detec-
+tion. By leveraging the information potential field, we achieved
+a more realistic approximation of the feature space density.
+Our experiments are conducted on 2D synthetic datasets,
+including the two-moons and three-spirals datasets, as well
+as OOD detection tasks comparing the CIFAR-10 and SVHN
+datasets. The experimental results highlight the superiority
+of the proposed method while the IPF methodology was the
+simplest (Parzen estimation). Future work will demonstrate the
+utility of advanced RKHS methods in this line of research.
+
+ACKNOWLEDGMENT
+
+This research was supported by the grant N000142312571
+and N000142512223.
+
+REFERENCES
+
+[1] Y. LeCun, Y. Bengio, and G. Hinton, “Deep learning,” Nature, vol. 521,
+
+no. 7553, pp. 436-444, May 2015.
+
+[2] A. Krizhevsky, I. Sutskever, and G. E. Hinton, “ImageNet classification
+
+with deep convolutional neural networks,’ Adv. Neural Inf. Process.
+
+Syst., vol. 25, pp. 1097-1105, 2012.
+
+[3] D. W. Otter, J. R. Medina, and J. K. Kalita, “A survey of the usages
+
+of deep learning for natural language processing,’ IEEE Trans. Neural
+
+Netw. Learn. Syst., vol. 32, no. 2, pp. 604-624, Feb. 2020.
+
+[4] S. Grigorescu, B. Trasnea, T. Cocias, and G. Macesanu, “A survey of
+
+deep learning techniques for autonomous driving,” J. Field Robot., vol.
+
+37, no. 3, pp. 362-386, Mar. 2020.
+
+[5] Y. Ma, C. Yang, J. Zhang, Y. Wang, F. Gao, and F. Gao, “Human breast
+
+numerical model generation based on deep learning for photoacoustic
+
+imaging,” in *Proc. IEEE Eng. Med. Biol. Soc. (EMBC)*, Jul. 2020,
+
+pp. 1919-1922.
+
+[6] K. Ye, H. Tang, S. Dai, I. Fortel, P. M. Thompson, R. S. Mackin,
+A. Leow, H. Huang, L. Zhan, and Alzheimer’s Disease Neuroimaging
+Initiative, “BPEN: Brain Posterior Evidential Network for trustworthy
+brain imaging analysis,” Neural Netw., vol. 183, p. 106943, 2025.
+
+[8
+
+[9
+
+10
+
+11
+
+12
+13
+
+14
+
+15
+
+16
+
+17
+
+18
+
+19
+
+20
+21
+
+22
+
+23
+
+24
+
+25
+
+26
+
+27
+
+28
+
+29
+
+30
+
+31
+
+32
+
+W. Zhang, Z. Xu, and H. Cai, “Defining Boundaries: A Spectrum
+of Task Feasibility for Large Language Models,’ *arXiv preprint
+arXiv:2408.05873*, 2024.
+
+M. Abdar *et al.*, “A review of uncertainty quantification in deep
+learning: Techniques, applications and challenges,” Inf. Fusion, vol. 76,
+pp. 243-297, 2021.
+
+A. Der Kiureghian and O. Ditlevsen, “Aleatory or epistemic? Does it
+matter?” Struct. Saf., vol. 31, no. 2, pp. 105-112, 2009.
+
+E. Hiillermeier and W. Waegeman, “Aleatoric and epistemic uncertainty
+in machine learning: An introduction to concepts and methods,” Mach.
+Learn., vol. 110, no. 3, pp. 457-506, 2021.
+
+W. He, Z. Jiang, T. Xiao, Z. Xu, and Y. Li, “A survey on un-
+certainty quantification methods for deep learning,’ *arXiv preprint
+arXiv:2302.13425*, 2023.
+
+J. Gawlikowski *et al.*, “A survey of uncertainty in deep neural
+networks,” Artif. Intell. Rev., vol. 56, Suppl. 1, pp. 1513-1589, 2023.
+D. A. Cohn, Z. Ghahramani, and M. I. Jordan, “Active learning with
+statistical models,” J. Artif. Intell. Res., vol. 4, pp. 129-145, 1996.
+
+O. Sener and S. Savarese, “Active learning for convolutional neural
+networks: A core-set approach,” *arXiv preprint arXiv:1708.00489*,
+2017.
+
+Y. Gal, R. Islam, and Z. Ghahramani, “Deep Bayesian Active Learning
+with Image Data,’ in *Proc. 34th Int. Conf. Mach. Learn.*, 2017, pp.
+1183-1192.
+
+Y. C. Hsu, Y. Shen, H. Jin, and Z. Kira, “Generalized ODIN: Detecting
+out-of-distribution image without learning from out-of-distribution data,”
+in *Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit.*, 2020, pp.
+10951-10960.
+
+D. Hendrycks and K. Gimpel, “A baseline for detecting misclassified
+and out-of-distribution examples in neural networks,” *arXiv preprint
+arXiv:1610.02136*, 2016.
+
+R. M. Neal, *Bayesian Learning for Neural Networks*, Ph.D. disserta-
+tion, Univ. Toronto, 1995.
+
+R. M. Neal, “Bayesian training of backpropagation networks by the
+hybrid Monte Carlo method,” Tech. Rep. CRG-TR-92-1, Dept. Comput.
+Sci., Univ. Toronto, 1992.
+
+J. Denker and Y. LeCun, “Transforming neural-net output levels to
+probability distributions,’ Adv. Neural Inf. Process. Syst., vol. 3, 1990.
+D. J. MacKay, “A practical Bayesian framework for backpropagation
+networks,” Neural Comput., vol. 4, no. 3, pp. 448-472, 1992.
+
+Y. Gal and Z. Ghahramani, “Dropout as a Bayesian approximation:
+Representing model uncertainty in deep learning,” in *Proc. Int. Conf.
+Mach. Learn.*, 2016, pp. 1050-1059.
+
+B. Lakshminarayanan, A. Pritzel, and C. Blundell, “Simple and scalable
+predictive uncertainty estimation using deep ensembles,” Adv. Neural
+Inf. Process. Syst., vol. 30, 2017.
+
+M. Sensoy, L. Kaplan, and M. Kandemir, “Evidential deep learning to
+quantify classification uncertainty,’ Adv. Neural Inf. Process. Syst., vol.
+31, 2018.
+
+A. Malinin and M. Gales, “Predictive uncertainty estimation via prior
+networks,” Adv. Neural Inf. Process. Syst., vol. 31, 2018.
+
+J. Z. Liu *et al.*, “A simple approach to improve single-model deep
+uncertainty via distance-awareness,” J. Mach. Learn. Res., vol. 24, no.
+42, pp. 1-63, 2023.
+
+H. M. Bui and A. Liu, “Density-softmax: Efficient test-time model for
+uncertainty estimation and robustness under distribution shifts,” in *Proc.
+41st Int. Conf. Mach. Learn.*, Jul. 2024, pp. 4822-4853.
+
+J. Zhang, K. Das, and S. Kumar, “Discriminant Distance-Aware Rep-
+resentation on Deterministic Uncertainty Quantification Methods,” in
+*Proc. Int. Conf. Artif. Intell. Stat.*, Apr. 2024, pp. 2917-2925.
+
+J. van Amersfoort, L. Smith, Y. W. Teh, and Y. Gal, “Uncertainty
+estimation using a single deep deterministic neural network,” in *Proc.
+Int. Conf. Mach. Learn.*, Nov. 2020, pp. 9690-9700.
+
+J. Liu, Z. Lin, S. Padhy, D. Tran, T. B. Weiss, and B. Lakshminarayanan,
+“Simple and principled uncertainty estimation with deterministic deep
+learning via distance awareness,” Adv. Neural Inf. Process. Syst., vol.
+33, pp. 7498-7512, 2020.
+
+J. Mukhoti, A. Kirsch, J. van Amersfoort, P. H. Torr, and Y. Gal, “Deep
+deterministic uncertainty: A new simple baseline,” in *Proc. IEEE/CVF
+Conf. Comput. Vis. Pattern Recognit.*, 2023, pp. 24384-24394.
+
+D. Hendrycks and K. Gimpel, “A baseline for detecting misclassified
+and out-of-distribution examples in neural networks,” *arXiv preprint
+arXiv:1610.02136*, 2016.
+
+
+S. Liang, Y. Li, and R. Srikant, “Enhancing the reliability of out-
+of-distribution image detection in neural networks,” *arXiv preprint
+arXiv:1706.02690*, 2017.
+
+K. Lee, K. Lee, H. Lee, and J. Shin, “A simple unified framework
+for detecting out-of-distribution samples and adversarial attacks,’ Adv.
+Neural Inf. Process. Syst., vol. 31, 2018.
+
+W. Liu, X. Wang, J. Owens, and Y. Li, “Energy-based out-of-distribution
+detection,’ Adv. Neural Inf. Process. Syst., vol. 33, pp. 21464-21475,
+2020.
+
+J. van Amersfoort, L. Smith, A. Jesson, O. Key, and Y. Gal, “On feature
+collapse and deep kernel learning for single forward pass uncertainty,”
+*arXiv preprint arXiv:2102.11409*, 2021.
+
+J. C. Principe, *Information Theoretic Learning: Renyi’s Entropy and
+Kernel Perspectives*, Springer Sci. and Bus. Media, 2010, pp. 57-58.
+A. Krizhevsky and G. Hinton, “Learning multiple layers of features from
+tiny images,” Univ. Toronto, 2009.
+
+Y. Netzer, T. Wang, A. Coates, A. Bissacco, B. Wu, and A. Y. Ng,
+“Reading digits in natural images with unsupervised feature learning,”
+in *Proc. NIPS Workshop Deep Learn. Unsupervised Feature Learn.*,
+Dec. 2011, vol. 2011, no. 2, p. 4.
+
+B. W. Silverman, *Density Estimation for Statistics and Data Analysis*,
+Chapman and Hall/CRC, 1986.
+
+M. P. Naeini, G. Cooper, and M. Hauskrecht, “Obtaining well calibrated
+probabilities using Bayesian binning,” in *Proc. AAAI Conf. Artif.
+Intell.*, Feb. 2015, vol. 29, no. 1.
+
+K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image
+recognition,’ in *Proc. IEEE Conf. Comput. Vis. Pattern Recognit.*,
+2016, pp. 770-778.
+
+S. Zagoruyko, “Wide residual networks,’ *arXiv _ preprint
+arXiv:1605.07146*, 2016.
+
+L. van der Maaten and G. Hinton, “Visualizing data using t-SNE,” J.
+Mach. Learn. Res., vol. 9, pp. 2579-2605, 2008.
+
+L. G. S. Giraldo, M. Rao, and J. C. Principe, “Measures of entropy from
+data using infinitely divisible kernels,’ IEEE Trans. Inf. Theory, vol. 61,
+no. 1, pp. 535-548, 2014.
+
+S. Yu and J. C. Principe, “Understanding autoencoders with information
+theoretic concepts,” Neural Netw., vol. 117, pp. 104-123, 2019.

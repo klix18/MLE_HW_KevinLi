@@ -1,0 +1,1080 @@
+arXiv:2508.00679v1 [cs.CL] 1 Aug 2025
+
+Segment First, Retrieve Better: Realistic Legal Search via Rhetorical
+Role-Based Queries
+
+Shubham Kumar Nigam!
+Arnab Bhattacharya‘
+2 TISER Kolkata, India
+
+Noel Shallum?
+! TIT Kanpur, India
+
+Tanmay Dubey!
+
+3 Symbiosis Law School Pune, India
+
+{sknigam, tanmay, arnabb}@cse.iitk.ac.in
+noelshallum@gmail.com
+
+Abstract
+
+Legal precedent retrieval is a cornerstone of
+the common law system, governed by the prin-
+ciple of stare decisis, which demands consis-
+tency in judicial decisions. However, the grow-
+ing complexity and volume of legal documents
+challenge traditional retrieval methods. Trac-
+eRetriever mirrors real-world legal search by
+operating with limited case information, ex-
+tracting only rhetorically significant segments
+instead of requiring complete documents. Our
+pipeline integrates BM25, Vector Database, and
+Cross-Encoder models, combining initial re-
+sults through Reciprocal Rank Fusion before
+final re-ranking. Rhetorical annotations are gen-
+erated using a Hierarchical BiLSTM CRF clas-
+sifier trained on Indian judgments. Evaluated
+on IL-PCR and COLIEE 2025 datasets, Trac-
+eRetriever addresses growing document vol-
+ume challenges while aligning with practical
+search constraints, reliable and scalable foun-
+dation for precedent retrieval enhancing legal
+research when only partial case knowledge is
+available.
+
+1 Introduction
+
+The common law system’s foundation rests upon
+the principle of stare decisis, mandating judicial
+adherence to precedents established in prior rul-
+ings when addressing analogous issues and facts
+within the same jurisdiction. As legal documenta-
+tion grows in complexity and volume, sophisticated
+Natural Language Processing (NLP) techniques be-
+come indispensable for understanding, analyzing,
+and retrieving relevant precedents. TraceRetriever
+plays a crucial role in upholding stare decisis, facili-
+tating the identification of past judgments with sim-
+ilar legal contexts to ensure consistent application
+of the law. The sheer volume of legal resources, in-
+cluding judgments, statutes, and regulations, poses
+a significant challenge for legal professionals seek-
+ing pertinent precedents, underscoring the urgent
+need for effective retrieval mechanisms.
+
+A notable limitation in much of the existing
+work on automated precedent retrieval is its re-
+liance on using entire prior case documents as
+queries. This approach deviates significantly from
+real-world legal practice, where lawyers typically
+formulate search queries based on specific factual
+details and legal issues extracted from the case at
+hand, often with limited initial information. To
+address this gap, this paper tackles the challenge
+of mimicking real-world legal search scenarios in
+TraceRetriever by proposing a novel heuristic ap-
+proach. Our methodology strategically integrates
+the complementary strengths of a keyword-based
+model (BM25), a semantic Vector Database, and a
+fine-grained Cross-Encoder for re-ranking. A key
+innovation of our work lies in utilizing a trained
+Hierarchical Bidirectional LSTM (HierBiLSTM)
+model by (Bhattacharya et al., 2019) to classify sen-
+tences within legal documents into distinct rhetor-
+ical roles. We then leverage the role segments,
+identified through this classification, as the query
+for our retrieval pipeline. This deliberate use of
+limited, rhetorically-informed query components
+directly mirrors the information scarcity often en-
+countered in practical legal research. The core
+problem this paper addresses is therefore the devel-
+opment of a TraceRetriever system that effectively
+operates with limited, contextually relevant infor-
+mation, thereby more accurately reflecting real-
+world legal search processes.
+
+To evaluate the effectiveness of our proposed
+TraceRetriever pipeline, we conducted experiments
+on two established legal datasets: the Indian Le-
+gal Text Understanding and Reasoning (IL-PCR)
+dataset (Joshi et al., 2023) and the Competition
+on Legal Information Extraction and Entailment
+(COLIEE) 2025 dataset. Our pipeline employs a
+heuristic approach that strategically integrates the
+strengths of three distinct retrieval models: a se-
+mantic Vector Database, the BM25 algorithm, and
+a more nuanced Cross-Encoder. To further refine
+
+
+At the time of the assessment proceedings, the
+Assessee submitted a revised computation of
+income by revising its claim of deduction under
+Section 80IA of the Act. .....The High Court refused
+to interfere with the Tribunals order as far as the
+issue on deduction under Section 80IA_ is
+concerned. ..... According to him, the phrase
+derived from in subsection (1) of Section 801A of
+the Act indicates that the computation of
+deduction is restricted only to the profits and
+gains from the eligible business. .....He submitted
+that there is no indication in subsection (5) of
+Section 80IA that the deduction under subsection
+(1) is restricted to business income only. .....On the
+question of existence of vacancies, although
+learned counsel for the appellant submitted that
+vacancies are still lying there, which submission
+however has been refuted by the learned counsel
+for the State of Rajasthan. ....The assets of the
+Corporate Debtor shall be managed strictly in
+terms of the provisions of the IBC. .....The clause
+reads thus 12 Miscellaneous .
+
+At the time of the assessment proceedings, the Assessee submitted a revised
+computation of income by revising its claim of deduction under Section 801A of
+the Act. -Facts
+
+The High Court refused to interfere with the Tribunals order as far as the issue
+on deduction under Section 801A is concerned. -Issue
+
+According to him, the phrase derived from in subsection (1) of Section 801A of
+the Act indicates that the computation of deduction is restricted only to the
+profits and gains from the eligible business. -Arguments of Petitioner
+
+He submitted that there is no indication in subsection (5) of Section 80IA that
+the deduction under subsection (1) is restricted to business income only. -
+Arguments of Respondent
+
+On the question of existence of vacancies, although learned counsel for the
+appellant submitted that vacancies are still lying there, which submission
+however has been refuted by the learned counsel for the State of Rajasthan. --
+-Reasoning
+
+The assets of the Corporate Debtor shall be managed strictly in terms of the
+provisions of the IBC. -Decision
+
+The clause reads thus 12 Miscellaneous. -None
+
+Figure 1: Illustration of rhetorical role segmentation in a legal document. The left side shows the original excerpt,
+while the right side displays the labeled segments. In our approach, only relevant segments such as Facts and Issue
+are retained to emulate real-world legal case retrieval scenarios, where complete information like Reasoning or
+
+Decision may not be available at query time (Nigam et al., 2025).
+
+the initial retrieval results from the Vector Database
+
+and BM25, we implemented Reciprocal Rank Fu-
+
+sion (RRP), a robust re-ranking technique.
+
+In our TraceRetriever pipeline, we established
+BM25 as a robust baseline, representing a tradi-
+tional keyword-based approach to information re-
+trieval. To enhance the relevance and accuracy
+of our results, we implemented a sophisticated re-
+ranking strategy that leverages both semantic un-
+derstanding and fine-grained interaction. Specifi-
+cally, we employed Cross-Encoders to re-rank the
+top-k documents initially retrieved by two distinct
+methods: the lexical matching of BM25 and the se-
+mantic similarity captured by our Vector Database
+(a bi-encoder-based approach). This multi-faceted
+strategy effectively integrates the strengths of three
+complementary retrieval paradigms:
+
+Our key contributions are:
+
+1. A realistic legal retrieval strategy using rhetor-
+ical role-based queries reflecting limited-
+information scenarios.
+
+2. Development of TraceRetriever: A hybrid
+pipeline integrating BM25, vector search, and
+cross-encoder re-ranking.
+
+For the sake of reproducibility, we have made
+our dataset, code, and RAG-based pipeline imple-
+mentation via an github repository!.
+
+2 Related Work
+
+Legal case retrieval has witnessed a rapid transfor-
+mation with the advent of LLMs, RAG pipelines,
+
+‘https ://github.com/ShubhamKumarNigam/Legal_IR
+
+and rhetorical role labeling. Traditionally, legal in-
+formation retrieval relied heavily on lexical match-
+ing (e.g., BM25), which struggled to handle the
+semantic and structural nuances of legal texts. Re-
+cent innovations focus on improving retrieval ac-
+curacy by leveraging domain-specific embeddings,
+legal document structures, and rhetorical role un-
+derstanding.
+
+Several systems have explored enhancing le-
+gal QA and retrieval using hybrid architectures.
+(Wiratunga et al., 2024) integrates Case-Based Rea-
+soning with RAG to improve contextual relevance
+and factual correctness in legal question-answering.
+Similarly, (Panchal et al., 2025) utilizes FAISS and
+DeepSeek embeddings to make Indian legal knowl-
+edge accessible through a chatbot interface.
+
+Another significant trend is the use of rhetorical
+roles in structuring legal texts. (Bhattacharya et al.,
+2019; Malik et al., 2022) pioneered rhetorical role
+classification in Indian legal judgments, showing
+that deep neural architectures such as BiLSTM-
+CRF and multi-task learning can outperform tradi-
+tional methods. (Marino et al., 2023) further ad-
+vanced this by stacking transformers over LEGAL-
+BERT to capture inter-sentence dependencies for
+rhetorical role classification across multilingual
+legal datasets. These works collectively demon-
+strate the feasibility and utility of segmenting legal
+documents into roles such as Facts, Issues, and
+Reasoning categories that are highly valuable for
+information extraction and retrieval. In recent stud-
+ies, (Bhattacharya et al., 2019) proposed a CRF-
+
+
+BiLSTM model specifically for as signing rhetori-
+cal roles to sentences in Indian legal documents.
+In the context of document-to-document legal
+retrieval, methods like (Althammer et al., 2022),
+(Ma et al., 2023), and (Li et al., 2023) aim to
+overcome the challenges of long input lengths and
+weak semantic relevance by employing paragraph
+aggregation, structure-aware pretraining, and cus-
+tom contrastive loss functions. Meanwhile, (Tang
+et al., 2023) and (Tang et al., 2024) take a graph
+based approach, modeling the connectivity be-
+tween cases via attributed case graphs or global
+semantic networks to achieve state-of-the-art per-
+formance. (Nigam et al., 2022) presents a cascaded
+retrieval framework that integrates BM25 for lex-
+ical matching with Sentence BERT and Sent2Vec
+for semantic understanding. Interestingly, results
+show that BM25 alone often outperforms neural
+models, reaffirming the robustness and relevance
+of lexical approaches in legal case retrieval.
+Beyond traditional lexical and semantic meth-
+ods, several recent studies have explored innova-
+tive architectures to enhance legal case retrieval
+by addressing challenges such as long document
+length, complex legal semantics, and noisy or
+sparse queries. (Hu et al., 2022) proposes a re-
+trieval method grounded in legal facts by combin-
+ing topic modeling with BERT-based paragraph
+aggregation, offering more accurate semantic rep-
+resentations tailored to the legal domain. Similarly,
+(Shao et al., 2020) focuses on paragraph-level in-
+teractions, modeling fine-grained relationships be-
+tween query and candidate cases to improve rele-
+vance estimation using a cascade framework and
+BERT finetuned on legal entailment tasks. Address-
+ing structural and causal reasoning, (Zhang et al.,
+2023) introduces a counterfactual graph learning
+approach, which transforms legal cases into graphs
+of legal elements and enhances retrieval via coun-
+terfactual data augmentation and relational graph
+neural networks. Meanwhile, (Zhou et al., 2023)
+employ large language models (LLMs) to distill
+salient query content, showing that query reformu-
+lation using LLMs improves retrieval even in long,
+noisy legal queries. Structural reasoning is also em-
+phasized in SLR (Zhou et al., 2023), which incor-
+porates both internal (document segmentation into
+roles like Facts, Holding, Decision) and external
+(charge relationship graphs) structures to enhance
+retrieval accuracy via a learning-to-rank approach,
+(Santosh et al., 2025) enhances prior case retrieval
+by generating legal concepts from the factual sec-
+
+tion of a query case to capture semantic intent. Col-
+lectively, these works highlight a growing trend
+toward structurally aware, semantically enriched,
+and role-sensitive retrieval models supporting the
+need for rhetorical role-driven query formulations
+in real-world legal search settings.
+
+While these systems improve retrieval through
+structure, semantics, or scale, few explicitly ad-
+dress the limited-information retrieval scenario
+commonly encountered in real-world legal prac-
+tice, where queries often arise from partial know1-
+edge, such as only the Facts or Issues of a case.
+The (Deng et al., 2024) framework approaches this
+partially by reformulating legal documents into in-
+terpretable sub-facts using LLMs, but it does not
+explicitly tie these sub-facts to rhetorical roles.
+
+In contrast to general-purpose document re-
+trieval, (Joshi et al., 2023) propose U-CREAT, an
+unsupervised retrieval framework that extracts and
+matches event tuples consisting of predicates and
+their arguments from entire legal documents. How-
+ever, U-CREAT still requires parsing the full doc-
+ument to extract events and does not leverage ex-
+plicit legal segmentation such as rhetorical roles.
+
+3. Task Description
+
+The goal of this task is to develop models capable
+of retrieving the most relevant prior legal cases for
+a given query case, with a novel emphasis on mim-
+icking realistic legal reasoning workflows. Unlike
+previous work that provides entire case documents
+as input queries to retrieval models, we constrain
+the query representation by leveraging rhetorical
+role segmentation. This segmentation reflects how
+legal professionals typically reason over and search
+with focused portions of a case, such as facts, is-
+sues, or arguments, rather than the full text.
+
+Let Q = {1 @2,---,Qp} bea set of query legal
+cases, where each q; is a segmented case document
+composed of rhetorical roles:
+
+qi = {Facts;, Issues;, Arguments,,... }
+
+Rather than passing the full g; as a monolithic
+document, we present the segmented roles (individ-
+ually or in combination) to retrieval models to en-
+able fine-grained relevance modeling. This design
+encourages the system to focus on legally salient
+information while ignoring irrelevant or verbose
+content, thus improving efficiency and interpretabil-
+
+ity.
+
+
+Let D = {d,, d2,...,d,,} be a corpus of prece-
+dent legal documents. The objective is to re-
+trieve a ranked list of k relevant documents R; =
+{ri1,i2,---,Tik} CG D for each query q;, where
+documents are ranked by their relevance.
+
+We define a retrieval scoring function:
+
+g:QxD-R
+
+where g(q;,d;) outputs a relevance score indi-
+cating the degree to which the prior legal document
+d; is relevant to the query q;. The retrieved list R;
+for a query q; is then constructed by selecting the
+top & documents from D based on their relevance
+scores:
+
+R; = top-k{dj € D | g(aid;) is high}
+
+The input to the system is a legal query q;, and the
+output is a ranked list of & prior legal documents
+R;, ordered by their relevance to the query.
+
+4 Dataset
+
+To support research in the domain of Prior Case Re-
+trieval (PCR), we utilize the IL-PCR (Indian Legal
+Prior Case Retrieval) corpus, a large-scale collec-
+tion of Indian legal documents comprising 7,070
+English-language case texts by (Joshi et al., 2023).
+This corpus enables the development and bench-
+marking of retrieval systems specifically tailored
+to the Indian legal system.
+
+Dataset COLIEE’25 IL-PCR
+# Documents 9498 7070
+Avg. Document Size 4759.79 8093.19
+# Query Documents 2077 1182
+Vocabulary Size 426,118 113,340
+Total Citation Links 8640 8008
+Avg. Citations per Query 4.16 6.775
+Language English English
+Legal System Canadian Indian
+
+Table 1: Comparison of the IL-PCR corpus (Joshi et al.,
+2023) with the COLIEE’25 dataset.
+
+4.1 Overview of Dataset
+
+The IL-PCR corpus was created by collecting case
+documents from the public domain through the In-
+dianKanoon website*. The initial set comprises
+the 100 most-cited Supreme Court of India (SCI)
+
+https ://indiankanoon.org/
+
+judgments, referred to as the zero-hop set. To in-
+crease citation density, cases cited within these
+judgments (the one-hop set) were also collected.
+This hierarchical collection approach ensures that
+each document has multiple cited cases, allowing
+for robust retrieval evaluation (Joshi et al., 2023).
+Following standard preprocessing, empty or invalid
+cases were discarded. The resulting corpus was par-
+titioned into training (70%), validation (10%), and
+test (20%) splits.
+
+4.2 Preprocessing
+
+The preprocessing pipeline includes named entity
+normalization using spaCy’s NER model, along-
+side a manually curated gazetteer. This standard-
+ization improves the generalizability of learned
+representations. Hyperlinked citations in the doc-
+uments were replaced with a standardized token
+<CITATION>, while references to statutes and laws
+were retained, aligning with the task focus on case
+retrieval rather than statute retrieval. Addition-
+ally, an alternate version of the dataset removes
+entire sentences containing citations, as discussed
+in (Joshi et al., 2023).
+
+5 Methodology
+
+This section elucidates the TraceRetriever method-
+ology, a multi-stage framework designed for effec-
+tive prior case retrieval, particularly when initiated
+with partial case details. Our approach integrates
+advanced NLP techniques, starting with rhetorical
+role annotation to enable targeted querying of key
+document sections. We then employ a hybrid re-
+trieval strategy, combining semantic vector search
+with lexical BM25 matching on a focused candi-
+date set. The resulting ranked lists are fused using
+RRF, followed by a deep semantic re-ranking via a
+cross-encoder.
+
+5.1. Rhetorical Role Annotation of Legal
+Documents
+
+The initial stage of our methodology involves en-
+riching legal documents with rhetorical role annota-
+tions at the sentence level. To achieve this, we first
+perform sentence segmentation using the spaCy
+library. We implement the BiLSTM-CREF archi-
+tecture introduced by (Bhattacharya et al., 2019),
+which integrates a BiLSTM network with a Con-
+ditional Random Field (CRF) layer. The model
+takes as input sentence embeddings generated us-
+ing a sent2vec model trained specifically on Indian
+Supreme Court judgments. These embeddings are
+
+
+processed by the BiLSTM to capture the sequen-
+tial context across sentences. The CRF layer then
+models the dependencies between adjacent labels,
+enabling the output to follow the inherent structural
+patterns present in legal documents. By leverag-
+ing contextual cues from surrounding sentences,
+the model assigns a rhetorical role label to each
+sentence in a coherent and structured manner. The
+output of this stage is a corpus of legal documents
+where each sentence is associated with a predicted
+rhetorical role, forming the foundation for subse-
+quent information retrieval experiments.
+
+5.2 Vector Database Construction and
+Candidate Retrieval
+
+To enable efficient semantic retrieval of legal doc-
+uments, we employed Milvus to store and query
+dense vector representations. Each entry in the col-
+lection comprised a unique id, a 768-dimensional
+embedding generated using the Snowflake Arctic
+Embed v2.0 model, and the original document text
+(limited to 60,000 characters). An IVF-FLAT in-
+dex, configured with nlist = 2048 and using L2
+distance, was built to facilitate rapid approximate
+nearest neighbor search. Query vectors, embedded
+using the same model, were matched against the
+collection, with the nprobe parameter controlling
+the search depth across partitions. The top-k se-
+mantically similar documents were retrieved based
+on L2 distance, forming the candidate set for down-
+stream re-ranking via cross-encoders. This stage
+ensures that initial retrieval captures documents
+with high semantic alignment to the input query.
+
+5.3. BM25 Retrieval on Vector Database
+Candidates
+
+To complement semantic similarity with lexical
+matching, BM25 is applied but only to a reduced
+candidate set to avoid high computational costs.
+These candidates are pre-selected using vector-
+based retrieval, ensuring that BM25 is run only
+on semantically relevant documents, balancing effi-
+ciency and retrieval accuracy. The process begins
+by selecting the top-& candidates from the vector
+search. The parameter k controls the trade-off be-
+tween recall and efficiency larger may improve
+recall but increases computational load. We se-
+lected k as 1000 to maintain this balance. BM25
+then scores each candidate based on term frequency
+(TF) and inverse document frequency (IDF), rank-
+ing documents where rare, frequent query terms ap-
+pear. This yields a refined list of documents ranked
+
+by lexical relevance. By applying BM25 only to
+vector-selected candidates, the system enhances
+semantic matching with precise lexical signals.
+
+5.4 Reciprocal Rank Fusion (RRF)
+
+To combine the ranked outputs from vector-based
+and BM25 retrieval, we employ Reciprocal Rank
+Fusion (RRF), a rank aggregation technique that
+leverages the complementary strengths of different
+retrieval methods for improved performance. Each
+document in the ranked lists receives a numerical
+rank (1 for top, 2 for second, etc.). Its reciprocal
+rank is computed as aETR where k is a constant
+used to reduce the influence of lower-ranked re-
+sults. We selected an optimal k to balance influence
+across both retrieval methods. For each document,
+its reciprocal ranks across all lists are summed to
+generate an aggregated RRF score. Documents
+are then sorted in descending order of this score,
+producing a fused ranking that integrates both se-
+mantic similarity (from the vector DB) and lexical
+relevance (from BM25). RRF enhances retrieval
+by combining diverse signals, resulting in a more
+robust and accurate final document ranking than
+either method alone.
+
+5.5 Cross-Encoder Re-ranking
+
+To refine the ranking of candidate documents and
+prioritize the most relevant prior cases, we use a
+cross-encoder model. Unlike bi-encoders used in
+the initial retrieval, cross-encoders attend to both
+the query and document simultaneously. The pro-
+cess begins by forming (query, document) pairs
+from the top results obtained via Reciprocal Rank
+Fusion (RRF). This narrows the focus to promis-
+ing candidates. Each pair is scored using the pre-
+trained bge-reranker-v2-m3 model, which excels at
+capturing fine-grained semantic interactions. For
+long documents exceeding the model’s input lim-
+its, a chunking strategy is applied. Each chunk
+is scored individually, and a final relevance score
+is computed using a weighted average of chunk
+scores. Other aggregation strategies like max or
+mean can also be used. Finally, documents are re-
+ranked based on these cross-encoder scores. This
+yields a final ranked list where the most seman-
+tically relevant cases are prioritized, enhancing
+retrieval quality by leveraging the model’s deep
+understanding of query-document relations.
+
+
+Querying and Retrieving top-k candidates
+from vector database and milvus.
+
+Segmentation of query
+document into rhetorical roles
+as
+
+‘Segmented
+Documents
+
+is Hier-
+Query BiLSTM-
+Doc CRE
+
+Retrieving subset
+of candidates
+from BM25
+
+Combining outputs from BM25 and Vector database using RRF
+and reranking candidate list using Cross encoder
+
+Md
+i
+os inal
+Combined TOSS liar
+ranked list coder "
+list
+y)
+
+Figure 2: TraceRetriever Pipeline
+
+5.6 TraceRetriever: A Hybrid Legal Case
+Retrieval Framework
+
+The TraceRetriever pipeline combines rhetorical
+role segmentation, vector-based retrieval, keyword-
+based retrieval (BM25), reciprocal rank fusion
+(RRF), and cross-encoders to perform effective and
+realistic legal case retrieval. It begins by segment-
+ing the query legal document into sentences and
+classifying each into rhetorical roles (e.g., Facts,
+Issue, Argument, Reasoning, and Decision) using
+a pre-trained Hierarchical BiLSTM. This segmen-
+tation supports role-specific querying, reflecting
+real-world scenarios where legal practitioners of-
+ten search based on partial case descriptions. To
+retrieve initial candidates efficiently, a bi-encoder is
+used to encode both the rhetorically-filtered query
+and documents into dense embeddings. A vector
+database is then queried to retrieve the top-k seman-
+tically relevant documents. Since applying BM25
+across the entire corpus is computationally expen-
+Sive, it is selectively applied only to this subset
+of vector-retrieved documents to capture lexical
+overlap. To unify the strengths of semantic and
+lexical signals, the results from the vector search
+and BM25 are merged using Reciprocal Rank Fu-
+sion (RRF), which produces a single ranked list. Fi-
+nally, a cross-encoder re-ranks this list by jointly en-
+coding each query-document pair to compute fine-
+grained relevance scores. Through this multi-stage
+approach, TraceRetriever effectively combines se-
+mantic understanding, lexical precision, and deep
+relevance modeling addressing the challenges of
+prior case retrieval under limited-information con-
+ditions.
+
+6 Evaluation Metrics
+
+To evaluate the effectiveness of our information re-
+trieval models, we employ a standard set of metrics
+commonly used in retrieval tasks.
+
+Our primary evaluation relies on Precision@k,
+Recall@k, Mean Average Precision (MAP), Mean
+Reciprocal Rank (MRR), and F1 @k. Precision @k
+quantifies the fraction of relevant documents within
+the top-k retrieved results, whereas Recall@k as-
+sesses the system’s capability to identify all rele-
+vant documents within the top-k. MAP offers an
+overall performance measure by averaging the pre-
+cision at each rank where a relevant document is
+found, across all queries. MRR focuses on the rank
+of the first relevant document in the result list. Fi-
+nally, Fl @k calculates the harmonic mean of Preci-
+sion@k and Recall @k, providing a balanced evalu-
+ation of both aspects. Collectively, these metrics of-
+fer a thorough evaluation framework for assessing
+the ranking effectiveness and retrieval performance
+of the models. Here, we introduce the results of
+our experiments and discuss the performance of
+various models. Table 2 provides a summary of
+evaluation metrics for every model.
+
+7 Results Analysis
+
+Our experimental evaluation demonstrates signifi-
+cant variations in retrieval performance across dif-
+ferent query formulations based on rhetorical roles
+and retrieval methodologies. Table 2 presents a
+comprehensive comparison of precision, recall, F1-
+score, Mean Average Precision (MAP), and Mean
+Reciprocal Rank (MRR) across all experimental
+configurations.
+
+7.1 Retrieval Method Performance
+
+The empirical results reveal distinct performance
+characteristics among the three retrieval meth-
+ods. BM25, a traditional lexical matching ap-
+proach, consistently underperforms compared to
+the semantic-based methods across all query con-
+figurations. This performance gap underscores the
+limitations of term-frequency based approaches
+
+
+Dataset Model Precision@k Recall@k Fl-score@k MAP MRR &k
+
+Full Query BM25 0.0819 0.1023 —-0.0740~—S «0.2116 0.2182 6
+(L-PCR). Vector DB 0.1715 0.1754 0.1419 -—(0.3484.0.3585 5
+Cross-encoder 0.1459 0.1858 0.1301 0.3480 0.3339 6
+
+Facts M25 0.0797 0.0835. —s«0.0694. «0.1599 0.1684 5
+
+(IL-PCR) Vector DB 0.1093 0.1574. 0.1097 (0.2566 0.2783 7
+Cross-encoder 0.0916 0.2050 0.1082 0.2364 0.2725 I1
+
+Facts+ BM25 0.0803 0.1152 0.0800 ~—- 0.1907 0.20147
+
+Issue Vector DB 0.1281 0.1606 0.1200 0.2880 0.30556
+
+(IL-PCR) Cross-encoder 0.1134 0.1723 (0.1143 0.2554 0.2733. «7
+Facts BM25 0.0900 0.1328 =~ 0.0908 ~—0.21110.2259-7
+
+Arguments Vector DB 0.1630 0.1775 0.1418 0.3291 0.34315
+(IL-PCR) Cross-encoder 0.1121 0.2295 0.1277 0.2680 0.3045 10
+Facts BM25 0.0947 0.1034 0.0824 (0.2081 0.21445
+
+Reasoning Vector DB 0.1843 0.2088 0.1636 (0.3783 0.3924 5
+(IL-PCR) Cross-encoder 0.1223 0.2815 0.1436 0.2973 0.3316 11
+Facts+ BM25 0.0884 0.1115. 0.0833 «0.1864 0.1926 6
+
+Decition Vector DB 0.121 0.1747 0.1212 0.2931-«0.3157. 7
+(IL-PCR) Cross-encoder 0.1006 0.2235 0.1179 0.265 0.2991 11
+Coli BM25 0.0549 0.1139 (0.0661 —:0.1410 0.1440 6
+Dataset Vector DB 0.0515 0.1795 0.0720 0.1695 0.1786 11
+Cross-encoder 0.0587 0.1545 0.0754 0.1574 0.1638 8
+
+Table 2: Performance comparison across different query
+configurations and models on IL-PCR and COLIEE
+datasets
+
+in capturing the nuanced legal semantics present
+in case documents. Vector DB demonstrates su-
+perior performance in precision-oriented metrics,
+achieving the highest MAP (0.3783) and MRR
+(0.3924) scores with the Facts+Issue+Reasoning
+configuration. Notably, Vector DB consistently
+requires lower optimal & values (typically 5-7),
+indicating its strong ability to position relevant
+documents at higher ranks. This characteristic
+makes Vector DB particularly suitable for appli-
+cations where precision at lower ranks is priori-
+tized. The Cross-encoder model exhibits different
+performance characteristics, consistently achieving
+higher recall values but requiring larger k values
+(7-11) to reach optimal performance. For instance,
+with the Facts+Issue+Reasoning configuration, the
+Cross-encoder achieves the highest recall (0.2815)
+among all methods but at k = 11. This suggests
+that Cross-encoder captures a broader range of rel-
+evant documents but with less precise ranking ca-
+pability compared to Vector DB.
+
+7.2 Impact of Rhetorical Role Configurations
+
+The experimental results demonstrate that query
+formulation using specific rhetorical roles signifi-
+cantly impacts retrieval effectiveness. Several key
+observations emerge:
+
+Using only factual components (Facts) yields
+the lowest performance across all retrieval meth-
+ods, with Vector DB achieving MAP of 0.2566
+and MRR of 0.2783. This finding suggests that
+factual information alone provides insufficient con-
+text for effective legal case retrieval. The addition
+of issue information (Facts+Issue) produces mod-
+est improvements across all models, with Vector
+DB showing MAP of 0.2880 and MRR of 0.3055.
+This improvement indicates that legal issues pro-
+vide important discriminative information beyond
+mere facts. When argumentative elements are in-
+corporated (Facts+Issue+Arguments), we observe
+substantial performance gains, particularly for Vec-
+tor DB (MAP: 0.3291, MRR: 0.3431) and Cross-
+encoder (Recall@k: 0.2295). This suggests that
+arguments contain substantive information about
+legal reasoning that aids in identifying relevant
+precedents. The Facts+Issue+Reasoning config-
+uration consistently yields the best performance
+across all retrieval methods, with Vector DB achiev-
+ing the highest overall MAP (0.3783) and MRR
+(0.3924). This finding highlights the critical im-
+portance of legal reasoning components in deter-
+mining case relevance. It suggests that the explicit
+reasoning articulated by judges forms the most dis-
+criminative aspect of legal documents for retrieval
+purposes. Interestingly, incorporating the deci-
+sion component (Facts+Issue+Decision) results
+in performance degradation compared to the rea-
+soning configuration. Vector DB’s MAP decreases
+to 0.2931 and MRR to 0.3157, while Cross-encoder
+shows similar declines. This degradation may be at-
+tributed to the fact that decisions often contain stan-
+dardized language that is less discriminative than
+the specific reasoning that led to those decisions.
+The full query configuration performs relatively
+well (Vector DB: MAP 0.3484, MRR 0.3585), but
+still falls short of the Facts+Issue+Reasoning con-
+figuration. This indicates that using the entire doc-
+ument introduces noise that dilutes retrieval effec-
+tiveness.
+
+7.3 Dataset Comparison
+
+A comparison between the IL-PCR and COLIEE
+datasets reveals substantial performance disparities.
+All retrieval methods perform markedly better on
+the IL-PCR dataset. On the COLIEE dataset, the
+best performance is achieved by Vector DB with
+MAP of 0.1695 and MRR of 0.1786, substantially
+lower than the corresponding metrics on IL-PCR.
+This disparity may be attributed to differences in
+
+
+document structure, domain-specific language, or
+the inherent complexity of the legal relationships
+represented in the COLIEE dataset. Additionally,
+our BiLSTM-based rhetorical role segmentation
+model was trained specifically on Indian legal doc-
+uments.
+
+7.4 Optimal k Values
+
+In the context of information retrieval, & represents
+the number of top-ranked documents retrieved by
+a system. An interesting observation from our
+experiments is the variation in optimal / values
+across different configurations. Vector DB gener-
+ally achieves optimal performance at lower k val-
+ues (5—7), while Cross-encoder typically requires
+higher k values (7-11) to reach optimal perfor-
+mance. This pattern is consistent across query
+configurations and further emphasizes the distinct
+characteristics of these retrieval approaches: Vec-
+tor DB excels at precise ranking of highly relevant
+documents within a smaller top-& set, while Cross-
+encoder captures a broader range of potentially
+relevant documents, often requiring a larger top-k
+to include the most pertinent results due to less
+precise initial ranking.
+
+7.5 Error Analysis
+
+Retrieval errors were common when queries lacked
+argumentative depth or rhetorical coherence. Par-
+tial segments like Facts or Facts+Issue often led
+to vague queries, reducing the ability to retrieve
+precise legal precedents. Cross-encoders achieved
+high recall but lower MAP in such settings. For
+example, in the Facts-only configuration (Table 2),
+recall was 0.205, but MAP dropped to 0.2364, indi-
+cating difficulty in ranking the most legally relevant
+documents.
+
+BM25 struggled with rhetorical overlap, particu-
+larly in IL-PCR, where Facts-only and Facts+Issue
+yielded low MAPs of 0.1599 and 0.1907. Its
+reliance on surface-level term frequency lim-
+ited its ability to distinguish semantically sim-
+ilar yet legally distinct content. Interestingly,
+dense retrieval with Vector DB performed bet-
+ter in focused configurations. In IL-PCR, the
+MAP improved from 0.3484 (Full) to 0.3783
+(Facts+Issue+Reasoning), likely due to reduced
+procedural noise and improved signal-to-noise ratio
+in embeddings. This suggests that full-document
+queries, though comprehensive, may dilute dense
+models with irrelevant content. In contrast, se-
+lected rhetorical segments enhance semantic rich-
+
+ness and focus. Cross-encoders performed best
+when queries included Arguments or Reasoning,
+but struggled without structured argumentative
+flow. Overall, Vector DB benefited most from
+rhetorically rich inputs, with combinations like
+Facts+Issue+Reasoning offering the best trade-off
+between semantic depth and legal specificity.
+
+In COLIEE, absence of rhetorical segmentation
+degraded performance across models. Vector DB’s
+MAP dropped to 0.1695, and BM25 to 0.141, as
+noisy, unsegmented queries confused both dense
+and sparse retrievers. The rhetorical classifier,
+trained on Indian cases, also failed to generalize
+to Canadian judgments in COLIEE, reducing the
+effectiveness of rhetorical-aware retrieval.
+
+8 Conclusions and Future Work
+
+This work introduced a novel approach to prior
+case retrieval that better reflects real-world legal
+research, where professionals often rely on partial
+case information like Facts and Issue. By using
+rhetorical role segmentation to extract these com-
+ponents as queries, our method simulates realistic
+legal workflows. Evaluations on ILTUR and COL-
+IEE datasets showed that even under these con-
+straints, our pipeline BM25, VectorDB, RRF, and
+cross-encoder reranking retrieves relevant cases,
+though with reduced precision and recall compared
+to full-document queries. Nonetheless, this role-
+based querying aligns closely with how legal pro-
+fessionals conduct research, offering a practical
+shift in retrieval methodology. Our main contribu-
+tion is a conceptual framework for retrieval under
+partial information, encouraging a more practice-
+oriented direction in legal IR. Rather than chasing
+ideal scores, we aim to model realistic scenarios
+that support practical system design. This work has
+laid the groundwork for a more realistic paradigm
+in prior case retrieval by focusing on the informa-
+tion actually available at the initial stages of legal
+research. Our findings underscore the viability of a
+pipeline leveraging rhetorical role segmentation for
+query formulation, demonstrating effective, albeit
+reduced, retrieval performance compared to meth-
+ods relying on complete case documents. Future
+work includes improving retrieval robustness under
+sparse queries, enhancing rhetorical segmentation,
+and testing advanced rerankers. We also aim to
+explore cross-lingual and multi-domain retrieval
+to further bridge academic research and real-world
+legal use cases.
+
+
+Limitations
+
+While this work presents a novel approach to prior
+case retrieval that mirrors real-world legal research,
+several limitations remain and highlight directions
+for improvement. A key challenge is the semantic
+sparsity of queries constructed from only rhetorical
+roles like Facts and Issue. This constrained input
+can omit important context, limiting the models’
+ability to fully capture legal reasoning and reduc-
+ing retrieval precision. Rhetorical overlap between
+roles such as Facts and Reasoning poses another
+issue. Their linguistic similarity makes it difficult
+especially for models like BM25 to differentiate
+cases based solely on rhetorical cues. While cross-
+encoders and vector models mitigate this to some
+extent, they still struggle with nuanced legal dis-
+tinctions. Class imbalance in rhetorical roles also
+affects performance, particularly for underrepre-
+sented roles like Issue or Decision. Additionally,
+the computational complexity of advanced mod-
+els like cross-encoders and dense retrievers can
+hinder scalability. Their high resource demands
+may limit deployment in real-world systems. Fu-
+ture work should explore optimization techniques
+such as pruning or quantization to maintain perfor-
+mance with lower resource requirements. While
+the system shows promise under real-world con-
+straints, addressing these limitations will be crucial
+for building scalable and robust legal retrieval sys-
+tems.
+
+References
+
+Sophia Althammer, Sebastian Hofstatter, Mete Sertkan,
+Suzan Verberne, and Allan Hanbury. 2022. Parm:
+A paragraph aggregation retrieval model for
+dense document-to-document retrieval. Preprint,
+arXiv:2201.01614.
+
+Paheli Bhattacharya, Shounak Paul, Kripabandhu
+Ghosh, Saptarshi Ghosh, and Adam Wyner. 2019.
+Identification of rhetorical roles of sentences in in-
+dian legal judgments. In Legal Knowledge and In-
+formation Systems - JURIX 2019: The Thirty-second
+Annual Conference, Madrid, Spain, December 11-13,
+2019, volume 322 of Frontiers in Artificial Intelli-
+gence and Applications, pages 3-12. IOS Press.
+
+Chenlong Deng, Kelong Mao, and Zhicheng Dou.
+2024. Learning interpretable legal case retrieval via
+knowledge-guided case reformulation. In Proceed-
+ings of the 2024 Conference on Empirical Methods
+in Natural Language Processing, pages 1253-1265,
+Miami, Florida, USA. Association for Computational
+Linguistics.
+
+Weifeng Hu, Siwen Zhao, Qiang Zhao, Hao Sun, Xifeng
+Hu, Rundong Guo, Yujun Li, Yan Cui, and Long Ma.
+2022. Bert_If: A similar case retrieval method based
+on legal facts. Wireless Communications and Mobile
+Computing, 2022(1):2511147.
+
+Abhinav Joshi, Akshat Sharma, Sai Kiran Tanikella,
+and Ashutosh Modi. 2023. U-CREAT: Unsupervised
+case retrieval using events extrAcTion. In Proceed-
+ings of the 61st Annual Meeting of the Association for
+Computational Linguistics (Volume 1: Long Papers),
+pages 13899-13915, Toronto, Canada. Association
+for Computational Linguistics.
+
+Haitao Li, Qingyao Ai, Jia Chen, Qian Dong, Yueyue
+Wu, Yiqun Liu, Chong Chen, and Qi Tian. 2023.
+Sailer: Structure-aware pre-trained language model
+for legal case retrieval. Preprint, arXiv:2304.11370.
+
+Yixiao Ma, Yueyue Wu, Weihang Su, Qingyao Ai,
+and Yiqun Liu. 2023. Caseencoder: A knowledge-
+enhanced pre-trained model for legal case encoding.
+Preprint, arXiv:2305.05393.
+
+Vijit Malik, Rishabh Sanjay, Shouvik Kumar Guha,
+Angshuman Hazarika, Shubham Kumar Nigam,
+Arnab Bhattacharya, and Ashutosh Modi. 2022. Se-
+mantic segmentation of legal documents via rhetori-
+cal roles. In Proceedings of the Natural Legal Lan-
+guage Processing Workshop 2022, pages 153-171,
+Abu Dhabi, United Arab Emirates (Hybrid). Associa-
+tion for Computational Linguistics.
+
+Gabriele Marino, Daniele Licari, Praveen Bushipaka,
+Giovanni Comandé, Tommaso Cucinotta, et al. 2023.
+Automatic rhetorical roles classification for legal doc-
+uments using legal-transformeroverbert. In CEUR
+WORKSHOP PROCEEDINGS, volume 3441, pages
+28-36. CEUR-WS.
+
+
+Shubham Kumar Nigam, Tanmay Dubey, Govind
+Sharma, Noel Shallum, Kripabandhu Ghosh, and
+Arnab Bhattacharya. 2025. Legalseg: Unlocking the
+structure of indian legal judgments through rhetorical
+role classification. arXiv preprint arXiv:2502.05836.
+
+Shubham Kumar Nigam, Navansh Goel, and Arnab
+Bhattacharya. 2022. nigam@ coliee-22: Legal case
+retrieval and entailment using cascading of lexical
+and semantic-based models. In JSAI International
+Symposium on Artificial Intelligence, pages 96-108.
+Springer.
+
+Dnyanesh Panchal, Aaryan Gole, Vaibhav Narute, and
+Raunak Joshi. 2025. Lawpal : A retrieval augmented
+generation based system for enhanced legal accessi-
+bility in india. Preprint, arXiv:2502.16573.
+
+T. Y. S. S. Santosh, Isaac Misael Olguin Nolasco, and
+Matthias Grabmair. 2025. Lecopcr: Legal concept-
+guided prior case retrieval for european court of hu-
+man rights cases. Preprint, arXiv:2501.14114.
+
+Yunqiu Shao, Jiaxin Mao, Yiqun Liu, Weizhi Ma, Ken
+Satoh, Min Zhang, and Shaoping Ma. 2020. Bert-
+pli: Modeling paragraph-level interactions for legal
+case retrieval. In Proceedings of the Twenty-Ninth
+International Joint Conference on Artificial Intel-
+ligence, IJCAI-20, pages 3501-3507. International
+Joint Conferences on Artificial Intelligence Organi-
+zation. Main track.
+
+Yanran Tang, Ruihong Qiu, Yilun Liu, Xue Li, and
+Zi Huang. 2023. Casegnn: Graph neural networks
+for legal case retrieval with text-attributed graphs.
+Preprint, arXiv:2312.11229.
+
+Yanran Tang, Ruihong Qiu, Hongzhi Yin, Xue Li, and
+Zi Huang. 2024. Caselink: Inductive graph learning
+for legal case retrieval. Preprint, arXiv:2403.17780.
+
+Nirmalie Wiratunga, Ramitha Abeyratne, Lasal Jayawar-
+dena, Kyle Martin, Stewart Massie, Ikechukwu Nkisi-
+Orji, Ruvan Weerasinghe, Anne Liret, and Bruno
+Fleisch. 2024. Cbr-rag: Case-based reasoning for re-
+trieval augmented generation in Ilms for legal ques-
+tion answering. In Case-Based Reasoning Research
+and Development, pages 445-460, Cham. Springer
+Nature Switzerland.
+
+Kun Zhang, Chong Chen, Yuanzhuo Wang, Qi Tian, and
+Long Bai. 2023. Cfgl-Icr: A counterfactual graph
+learning framework for legal case retrieval. In Pro-
+ceedings of the 29th ACM SIGKDD Conference on
+Knowledge Discovery and Data Mining, KDD °23,
+page 3332-3341, New York, NY, USA. Association
+for Computing Machinery.
+
+Youchao Zhou, Heyan Huang, and Zhijing Wu. 2023.
+Boosting legal case retrieval by query content se-
+lection with large language models. Preprint,
+arXiv:2312.03494.

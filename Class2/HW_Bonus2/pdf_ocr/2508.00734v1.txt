@@ -1,0 +1,1656 @@
+arXiv:2508.00734v1 [cs.LG] 1 Aug 2025
+
+Adaptive Machine Learning-Driven Multi-Fidelity Stratified
+Sampling for Failure Analysis of Nonlinear Stochastic Systems
+
+Liuyun Xu*, Seymour M.J. Spence**
+
+“Department of Civil and Environmental Engineering, University of Michigan, Ann Arbor, MI 48109, USA
+
+Abstract
+
+Existing variance reduction techniques used in stochastic simulations for rare event analysis
+still require a substantial number of model evaluations to estimate small failure probabilities.
+In the context of complex, nonlinear finite element modeling environments, this can become
+computationally challenging—particularly for systems subjected to stochastic excitation. To
+address this challenge, a multi-fidelity stratified sampling scheme with adaptive machine
+learning metamodels is introduced for efficiently propagating uncertainties and estimating
+small failure probabilities. In this approach, a high-fidelity dataset generated through strati-
+fied sampling is used to train a deep learning-based metamodel, which then serves as a cost-
+effective and highly correlated low-fidelity model. An adaptive training scheme is proposed to
+balance the trade-off between approximation quality and computational demand associated
+with the development of the low-fidelity model. By integrating the low-fidelity outputs with
+additional high-fidelity results, an unbiased estimate of the strata-wise failure probabilities is
+obtained using a multi-fidelity Monte Carlo framework. The overall probability of failure is
+then computed using the total probability theorem. Application to a full-scale high-rise steel
+building subjected to stochastic wind excitation demonstrates that the proposed scheme can
+accurately estimate exceedance probability curves for nonlinear responses of interest, while
+achieving significant computational savings compared to single-fidelity variance reduction
+approaches.
+
+Keywords: Multi-fidelity simulation; Failure probability analysis; Generalized stratified
+
+sampling; Adaptive metamodels; Deep learning; Uncertainty quantification
+
+*Corresponding author
+Email addresses: xliuyun@umich.edu (Liuyun Xu), smjs@umich.edu (Seymour M.J. Spence)
+
+Preprint submitted to Structural Safety August 4, 2025
+
+
+1. Introduction
+
+To enable efficient probabilistic analysis—including failure analysis—of structural systems
+subjected to general stochastic excitations (e.g., seismic or wind loading), considerable ad-
+vancements have been made in frameworks, modeling techniques, and computational capacity
+(e.g., [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]). Stochastic simulation frameworks that inte-
+grate Monte Carlo (MC) methods with high-fidelity modeling environments are commonly
+employed to propagate uncertainty and estimate failure probabilities for various limit states.
+While high-fidelity numerical models (e.g., finite element models) can capture essential non-
+linear behaviors (e.g., material and geometric nonlinearity), they are often computationally
+intensive. As a result, when estimating small failure probabilities associated with rare events,
+these frameworks can become computationally prohibitive due to the large number of model
+evaluations required.
+
+To alleviate computational demands, variance reduction techniques that maintain accu-
+racy while requiring significantly fewer model evaluations have been explored. Among these
+approaches, the widely used importance sampling [14] can face challenges when applied to
+high-dimensional problems encountered in practice, due to the difficulty of identifying a suit-
+able high-dimensional proposal density [15]. Subset Simulation (SuS) and Stratified Sampling
+(SS), including Generalized Stratified Sampling (GSS) [9], are capable of estimating small
+failure probabilities in high-dimensional settings. However, they generally still require several
+thousand model evaluations to achieve a target level of accuracy [9, 16, 17]. Compared to
+the SS approach, SuS can quickly become inefficient when estimating failure probabilities for
+multiple limit states of interest, as each limit state generally requires an independent imple-
+mentation of the SuS procedure [18]. Alternatively, models with reduced fidelity levels have
+emerged as a promising solution for approximating system outputs while using significantly
+lower computational budgets. Low-fidelity models for engineering applications generally fall
+into two categories: (a) reduced-order models, which simplify the underlying physics by, for
+example, reducing dynamic degrees of freedom or employing simplified material hysteretic
+laws [{19, 20]; and (b) metamodels (or emulators), which provide data-driven approximations
+of system outputs [21, 22, 23]. Recently, artificial intelligence (AI)-driven metamodels have
+
+attracted significant research interest due to their potential to achieve orders-of-magnitude
+
+
+speedups. These models are constructed by mapping parameterized input and output spaces
+using regression or interpolation techniques (e.g., polynomials, neural networks, and Krig-
+ing) [22, 24, 25]. However, it should be noted that low-fidelity models may yield biased or
+distorted estimates if used directly for uncertainty propagation [26].
+
+To leverage the accuracy of high-fidelity models and the computational efficiency of low-
+fidelity models, multi-fidelity approaches that integrate outputs from models with varying
+levels of fidelity have been developed [26, 27, 28, 29]. The core concept is to obtain an accurate
+estimate by shifting most of the computational burden to the cost-effective, but potentially
+biased, low-fidelity model evaluations, while applying corrections using a substantially smaller
+number of high-fidelity model evaluations. Multi-fidelity schemes are generally classified into
+two categories: (a) approximate control variate approaches [30, 31], such as Multi-Level
+Monte Carlo (MLMC) [32, 33] and Multi-Fidelity Monte Carlo (MFMC) [34, 35]; and (b)
+multi-fidelity surrogate models, such as multi-fidelity Gaussian process models (Cokriging)
+(36, 37]. Among these methods, MFMC has gained recognition as an effective means of
+accelerating standard MC estimation that would otherwise rely entirely on computationally
+demanding high-fidelity models [29]. Extensive studies have demonstrated the practicality
+and efficiency of MFMC using various categories of low-fidelity models [34, 38, 39]. The
+optimal allocation of evaluations across fidelity levels can be determined by minimizing the
+variance of the MFMC estimator [34]. For efficient MFMC implementation, two key char-
+acteristics of low-fidelity models are essential: (a) high correlation with the high-fidelity
+model; and (b) substantial computational savings. However, MFMC can become less ef-
+fective when addressing small-probability problems. This limitation arises from the need to
+capture extreme system responses associated with rare failures, which are critical for accurate
+estimation. Random sampling struggles to generate such rare-event samples efficiently.
+
+This paper develops a Multi-Fidelity Stratified Sampling (MFSS) scheme that employs
+an adaptive machine learning metamodel as the low-fidelity model to efficiently propagate
+uncertainties and estimate small failure probabilities. In this approach, a high-fidelity sam-
+ple set generated through GSS is used to train a deep learning-based low-fidelity model.
+An adaptive training strategy is proposed to optimize the trade-off between approximation
+
+accuracy and computational cost. This strategy aims to minimize the amount of training
+
+
+data while ensuring sufficient unbiased correlation between the high- and low-fidelity models,
+as determined through K-fold cross-validation. Once developed, a low-fidelity sample set of
+any size can be rapidly generated. To ensure the estimation remains unbiased, an additional
+high-fidelity sample set is generated and combined with the low-fidelity sample set. The
+conditional failure probability for each stratum is then estimated using MFMC with opti-
+mally allocated high- and low-fidelity outputs. Subsequently, the overall MFSS estimator is
+constructed using the total probability theorem. Through application to a full-scale high-rise
+steel building subjected to stochastic wind excitation, the proposed scheme demonstrates
+high accuracy and significant computational savings in estimating exceedance probability
+curves for various system responses. The advantages of the MFSS approach over traditional
+
+GSS schemes relying solely on high-fidelity models are further highlighted.
+
+2. Problem Setting
+
+Consider a dynamic, nonlinear structural system subjected to stochastic excitation F'(t; 0),
+
+such as wind or seismic loading, characterized by a vector of uncertain parameters 0 =
+
+{01,02,--.,9n,}7 € IR™, where ng denotes the dimension of @. In general, the system re-
+
+sponse, y(t;@), can be expressed as:
+y(t; @) = M(F(t; @)) (1)
+
+where M(-) represents a generally high-dimensional and computationally intensive nonlin-
+ear finite element model (hereafter referred to as the “high-fidelity model”) that maps the
+stochastic excitation to the structural response (e.g., displacements at degrees of freedom).
+The quantity of interest, Z, is derived from the time-dependent system response y(t; 0)
+through a function f, ie, Z = f(y(t;@)). This function may involve various operations,
+such as extracting the peak displacement across all degrees of freedom. Let p(@) denote the
+probability density function of 8. The problem of interest is to estimate the probability that
+Z exceeds a critical threshold (limit state) z;, denoted as Py; = P(Z > z;). This probability
+can be expressed as the expected value of a consequence measure h;, defined as a function of
+
+0:
+
+Pp = E[hi(8)] = [ ni(8) p(0) dO (2)
+
+
+where the subscript 7 refers to the ith limit state of interest, and E|-] denotes the expectation
+
+operator. The function h;(-) can take various forms, including: (a) an indicator function,
+
+hi(-) =1(Z > 2), which equals 1 when Z > z; and 0 otherwise [38]; or (b) a log-transformed
+
+kernel estimator, h;(-) = 1—K (eS), where K(-) is a distribution function with a positive
+kernel (e.g., the standard normal distribution [40, 41]), and 6 is a bandwidth parameter [42].
+
+Accurately estimating small failure probabilities associated with rare events using Eq. (2)
+typically requires a large number of high-fidelity model evaluations (often on the order of
+thousands), leading to significant computational challenges. To address this, this paper
+develops an MFSS framework that implements MFMC within a stratified probability space
+to enable efficient estimation of small failure probabilities. To further enhance computational
+efficiency, a deep learning-based metamodel is constructed and employed as the low-fidelity
+
+model within the proposed MFSS framework.
+
+3. Background Schemes
+
+3.1. Generalized Stratified Sampling
+
+Stratified sampling has been demonstrated as an efficient method for estimating small
+failure probabilities, enabling significant variance reduction compared to the direct MC ap-
+proach [16]. In this scheme, the sample probability space is partitioned into N, mutually
+exclusive and collectively exhaustive subevents, E*, for k = 1,2,..., Ns, termed strata. This
+allows for samples to be drawn from each stratum, including those associated with extreme
+responses related to rare events. To address problems where stratification based on the ba-
+sic random variables does not yield obvious computational benefits—such as when no single
+random variable dominates the response—Arunachalam and Spence {9] proposed generalized
+stratified sampling, GSS. This approach focuses on partitioning the probability space with
+respect to an intermediate quantity that is highly correlated with the system response, re-
+ferred to as the stratification variable (SV). To ensure computational efficiency of GSS, the
+cost of evaluating SV should be significantly less than the cost of directly evaluating the
+limit state function.
+
+GSS adopts a double sampling approach. In Phase I, direct MC techniques are employed
+to explore the probability space of SV by employing a large number of MC samples, Nuc.
+
+
+By leveraging the principles of random sampling, the strata probabilities can be estimated
+as P(E*) =» Nko/Nuc for k = 1,...,Ns, where Nk, represents the number of samples out
+of Nuc lying in the kth stratum, denoted as strata-wise samples. To ensure an adequate
+number of samples in each stratum, a large number of MC samples should be generated.
+Specifically, approximately Nyc = 10? evaluations of SV are required to yield an estima-
+tion of P(E*) = 10-™ with a coefficient of variation (COV) of 10%, resulting in roughly 10?
+samples within the stratum E* [43]. In Phase II, from the Nk, strata-wise samples, Nk,
+samples are selected to perform limit state evaluations and estimate the conditional failure
+probability, Pr, = P(Z > x|E*), for each stratum. Therefore, the total failure probability
+
+can be estimated as:
+
+Ns
+Py = S— Ph,- P(E")
+k=1
+
+N Nk k N.
+Sf SNe hi(O;) a a
+~S » —E - P(E") =) 84+ P(E") = Hiass (3)
+rat MC k=1
+
+where 0" is the jth selected realization of @ in stratum k, and §; ;, denotes the MC estimator of
+the stratum-wise conditional failure probability associated with the ith limit state. Another
+
+important property of this scheme is the estimator variance, which can be written as follows
+
+[9]:
+
+3 yue h;(0;) “s 2 V{hi(0*)
+V Hass | =v = ~1 +50 [P(E*)] Tne] -(1— rp) (4)
+MC k=1 MC
+where V[-] is the variance operator, 4%, = N K o/ Neo € (0,1] represents the proportion
+
+of samples in the kth stratum from Phase I considered in Phase II for failure probability
+evaluations. Detailed derivations of Eq. (4) can be found in [9].
+
+If a large number of MC samples is used to estimate the strata probabilities (N mc — ©),
+Pex will tend toward its true population value. In this context, the number of samples used
+to evaluate the limit state function is much fewer relative to the total number of strata-wise
+samples (1, — 0). As aresult, GSS tends towards classic SS applied over a known probability
+
+space of the SV. Under these conditions, the variance of the estimator in Eq. (4) can be
+
+
+simplified as:
+
+The above assumption is feasible as long as SV is cheap to evaluate.
+
+Finally, it can be shown that the COV of the GSS estimator, &;,¢35, can be estimated as:
+
+\/V Hi, css| _ real V [8a]
+
+KiGss = (6)
+Hass ae 1 Sik * ae
+
+3.2. Multi-Fidelity Monte Carlo
+
+A MFMC scheme that effectively integrates high- and low-fidelity model outputs can
+provide an unbiased estimator with substantial variance reduction [38]. Generally, a MFMC
+scheme can incorporate a range of numerical models with varying fidelity levels. This work
+focuses on a bi-fidelity setting, utilizing a single low-fidelity model alongside a high-fidelity
+model. For clarity, the terms HF’ and LF will be used to denote the high- and low-fidelity
+models. The respective computational costs of the HF’ and LF models are denoted by cypr
+and cpr, where ideally cyr >> cpr. The MFMC estimator, Aiur, for Eq. (2) can be
+mathematically expressed as [34, 38]:
+
+A
+
+~ 1,LF LHF
+Pp ump = 8nie eG — Srp )
+
+Ni,HF
+S hi nr(@
+Nir
+j=1
+Ni,LF Ni,HF
+) hitr(@ ) hitr(@ (7)
+Nir NiHF
+j=l j=l
+
+where s! represents the MC estimator using / evaluations of the « model (e.g., HF or LF);
+Ninr and N; pr are the number of HF and LF samples used for evaluating the 7th limit
+state of interest; h;,7r(-) and h; pr(-) represent consequence measures associated with the ith
+
+limit state of interest based on the high- and low-fidelity model evaluations; a; is the control
+
+variate coefficient. In Eq. (7), gure reuses the first Nj; model evaluations that are also
+
+used for ght *“, making the two estimators dependent [34]. Nevertheless, the unbiasedness
+
+of the estimator Hj,,47p holds, provided that 3; "" Niu
+
+and §;; share the same expectation,
+
+7
+
+
+which follows from the unbiasedness of the MC estimator. A proof of this result is provided
+in Appendix A.
+
+To enhance the efficiency of the MFMC estimator, a;, as well as the sample allocation
+ratio, r; = Nitr/ Nir, can be optimally determined through minimizing the estimator
+
+variance leading to [34, 38]:
+
+V [hiner]
+a; = p;:4/——— 8
+r= Nir _ CHF* p; (9)
+
+where p; denotes the correlation coefficient between hj, yr and h;pr. The minimized MFMC
+estimator variance can be expressed as:
+
+V | Aare] = Se . (1 - (: - =) #) (10)
+From Eq. (10), it can be demonstrated that when an uncorrelated LF’ model is considered
+(p; © 0), the MFMC estimator essentially reduces to that of direct MC using Nine HF
+samples. Conversely, when incorporating a perfect LF’ model (p; © 1), MFMC predominantly
+relies on LF’ model evaluations (r*? — oo). It is evident that increasing p; and cyp/crr
+results in an increase in r. This illustrates how the MFMC scheme achieves estimation
+precision with computational savings by shifting evaluations onto a highly correlated and
+cost-effective LF model. As shown in [38], achieving the same estimator variance using
+
+direct MC simulation based on HF’ model outputs requires the following number of model
+
+I -1
+Ni sim =i HF’ (: _ (: _ =) i) (11)
+r;
+
+where Nj; sim is the number of required high-fidelity model evaluations.
+
+evaluations:
+
+4. Proposed Approach
+
+4.1. Multi-Fidelity Generalized Stratified Sampling
+To further enhance computational efficiency in estimating small failure probabilities, this
+
+work proposes a scheme that performs MFMC within a stratified probability space, termed
+multi-fidelity stratified sampling, or MFSS. Consistent with GSS, as outlined in Sec. 3.1, the
+
+
+scheme consists of two implementation phases. In Phase I, direct MC sampling is employed to
+estimate the probability distribution of a predefined SV by generating a large number, Nuc,
+of MC samples. Through application of the approach outlined in Arunachalam and Spence [9],
+Nk_ | strata-wise samples can be collected for each stratum, enabling the estimation of strata
+probabilities P(E*). In Phase II, the conditional failure probability within each stratum
+is approximated using MFMC, as described in Sec. 3.2. The proposed MFSS approach
+is designed to efficiently combine the benefits of GSS and MFMC, significantly reducing
+computational cost while maintaining accuracy in the estimation of small failure probabilities.
+In the MFSS scheme, a HF sample set consisting of Nirain random samples from each
+stratum, selected from the N ‘ic strata-wise samples, is used as training data to develop a
+deep learning-based metamodel, which serves as the LF’ model (details on this model are
+provided in Sec. 4.2). This LF’ model is both computationally efficient and well correlated
+with the HF’ model, enabling efficient MFSS implementation. Once developed, strata-wise
+HF and LF outputs are combined to estimate the conditional failure probability, P fi for
+
+each stratum using MFMC, as follows:
+
+Niue
+
+Pr, ~ Me =a S- hir(@
+N; aE j=l
+
+Ni ir Near
+
+ak k hi, LF( (0%) — hi, LF( (12)
+=
+1,LF PF j=l
+
+j=l Ni,
+
+where N};- and N*,- ave the number of HF and LF samples generated for evaluating the
+ith limit state within the kth stratum, and a’ is the control variate coefficient of the estimator
+for the kth stratum associated with the ith limit state. To ensure the unbiasness of the MFMC
+estimator, the LF outputs are generated using samples that were not used during training.
+This guarantees that the expected values of the MC estimators based on N, LLP and N,
+
+NF
+Noor hie (OF ) and spate =—_- >, NiHE heur(Ot ‘
+
+NEE 1
+LF evaluations, namely §, 3°" = NE Duj= i NE, Quj=l
+
+N. i LF
+
+are equal, which is a prerequisite for maintaining the unbiasedness of the overall estimation.
+To simplify MFMC implementation for multiple limit states of interest, the correlation
+coefficient between h;,7r and h;,,r is approximated by the correlation between appropriate
+
+HF and LF model outputs computed in a reduced space and aggregated across all strata.
+
+This correlation coefficient, denoted as p, will be discussed thoroughly in Sec. 4.2.4. This
+
+9
+
+
+approximation overcomes a common challenge in MFMC, which involves performing varying
+numbers of model evaluations when estimating the failure probabilities for multiple limit
+states of interest. Indeed, within this setting, the ratio of LF to HF’ model evaluations
+associated with each stratum remains constant across the various limit states of interest.
+In addition, because p is aggregated across all strata, the ratio is also independent of the
+particular stratum. Following the discussion in Sec. 3.2, the optimal value of this ratio can
+
+be expressed as:
+CHR: Pp”
+
+cr: (1- 2) (13)
+
+r= Ni p/Nie =
+
+where Nf, and NF,, denote the number of HF and LF samples used in each stratum for
+evaluating the limit states of interest.
+
+In this work, an equal allocation across all strata is utilized, that is, NE, = Nyr and
+Nt = Nop, for k = 1,2,...,Ns. With this setup, the MFMC estimator in Eq. (12) can be
+simplified as:
+
+Nur
+
+Ah ee Nap 7 hy HF(
+Nur NuF
+we (sh 2h LF (8;) — a hi,nP( ) (14)
+
+- can be optimally determined as:
+
+where a;
+
+(az) = p° Vv [At re /V [AE Le (15)
+
+From the total probability theorem, it follows that the overall MFSS estimator, Hi, Ms, can
+
+be expressed as:
+
+Ns
+Pri = d_ Ph, Pl ~ oi tue: P(E") = His (16)
+k=1
+
+Notably, the number of MC samples used in Phase-I sampling, Nyc, is recommended
+to be large in this approach. This ensures not only sufficient strata-wise samples for both
+
+HF and LF evaluations but also an unbiased estimation of the strata probabilities. In this
+
+10
+
+
+context, the variance of the MFSS estimator can be expressed as follows:
+
+V(Fius] => P(E? -V [Ake
+
+k=1
+Ng k
+Viihiar(@
+Nur r*
+k=1
+Subsequently, the COV of the MFSS estimator associated with the ith limit state, can be
+defined as Kis = V(Ai.us)/ His. To achieve the same variance, H F-based GSS would
+
+require the following number of model evaluations from each stratum:
+
+Ness = Nur- (1 - (1 - =) ey (18)
+
+To assess the efficiency of the proposed MFSS, the computational speed-up, spyg, relative
+
+to GSS based solely on HF’ model outputs with equivalent accuracy, can be expressed as:
+
+spas = cur: Ness
+cor (Nur + Neain) + Cre > Nur
+_ Nass (19)
+Nur + Nerain + caE IGE ‘Nur
+
+where Mtyain is the total number of HF’ training samples used to calibrate the LF’ model in
+each stratum. It is important to note that Eq. (19) holds for any limit state of interest.
+Compared to the H F’-based GSS scheme, the proposed MFSS approach offers significant
+computational savings without compromising accuracy by efficiently integrating strata-wise
+HF and LF model outputs. Furthermore, conventional MFMC inherently relies on random
+sampling and lacks a systematic mechanism to effectively capture rare events, limiting its
+efficiency for estimating small failure probabilities. By introducing stratification within the
+MFSS framework, the proposed approach explicitly targets the tails of the distribution,
+significantly enhancing the representation of extreme samples. As a result, MFSS extends
+the applicability of MFMC to rare event estimation, achieving significant computational
+efficiency without sacrificing accuracy. This is further supported by the development of
+an effective LF’ model through the combination of stratified sampling and deep learning
+
+techniques.
+
+11
+
+
+4.2. Adaptive Metamodel Development
+4.2.1. Preamble
+
+Within the MFSS scheme, a deep learning-based metamodel is developed using H F’ model
+evaluations for training, serving as the LF’ model. Deep neural networks are employed due
+to their ability to capture complex nonlinear relationships while offering substantial com-
+putational efficiency (i.e., over three orders of magnitude faster than direct computations
+using the full HF model) [44]. The stochastic excitation, F'(t;@), which captures phe-
+nomena such as record-to-record variability in seismic applications, serves as the source of
+input uncertainties. For simplicity, the input stochastic excitation, F'(t;@), and the output
+system response, y(t;@), will hereafter be denoted by F(t) and y(t), respectively. Gen-
+erally, F(t) and y(t), representing the n-dimensional excitation and system response (i.e.,
+F(t) = {F,(0),..., F(t)}" and y(t) = {y, (0), ..., yn(t)}"), are discretized into t, time steps.
+The discretized representations of F(t) and y(t) are denoted as F(t;) = {F{\(t;), .... Fn(ti)}"
+and y(t;) = {yi (ti), ..,yn(ti)}* for i = 1,...,t,. Consequently, the LF’ model development
+focuses on metamodeling the sequence-to-sequence mapping from the discretized stochastic
+
+excitation, F’, to the discretized system response, Y.
+
+4.2.2. Reduced Space
+
+Directly creating neural networks mapping from F(t;) to y(t;) for practical engineering
+systems, which often involve high-dimensional input and output spaces (n is often on the
+order of thousands in real-world applications), can be both computationally prohibitive and
+numerically unstable. To address these challenges, effective dimensionality reduction tech-
+niques have been extensively investigated [20, 45, 46]. This work adopts a Proper Orthogonal
+Decomposition (POD)-based model order reduction [44, 46, 47, 48]. In this approach, the n-
+dimensional discretized system output, y € R” can be approximately expressed as y © ®q,
+where q € R”” collects the discretized reduced outputs (n, is the reduced dimensionality
+with n, <n), and ® is the transformation matrix defining the projection into the reduced
+space. By carrying out a singular value decomposition (SVD) on a matrix X € R”*"*, which
+
+is constructed by collecting n; snapshots from the discretized system outputs across a set of
+
+12
+
+
+training samples, the dimensions of the reduced space, n,;, can be determined by:
+iA
+
+wr ea" (20)
+where 4, is the /th largest singular value of X and 7 € (0, 1] defines a truncation threshold that
+reflects a trade-off between accuracy and efficiency. The transformation matrix ® defining the
+reduced space can be constructed through collecting the first n, left singular vectors, termed
+POD modes. As 77 increases and more POD modes are included, the accuracy improves, but
+the dimensionality of the reduced space also increases. The input projection is defined using
+the transpose of the output reduction basis, ®7, i.e., p = ®’ F, ensuring that both inputs
+and outputs are consistently expressed within the same reduced subspace. Implementing
+this reduction converts the original high-dimensional mapping F — y in the physical space
+to a significantly lower-dimensional mapping p — q in the reduced space, thereby not only
+improving training efficiency but also enhancing the model’s ability to capture and generalize
+complex system behavior by isolating the dominant response modes that govern the system’s
+
+dynamics.
+
+4.2.8. Deep Learning-Based Metamodeling
+
+To establish the aforementioned mapping in the reduced space, several studies have ex-
+plored Long Term Short Memory (LSTM) networks for their effectiveness with sequential
+data such as discrete time-series data [44, 49, 50, 51]. LSTM networks have been demon-
+strated to outperform traditional Recurrent Neural Networks, which are prone to gradient
+vanishing or exploding problems, particularly when addressing long-term dependencies. More
+recently, GRU-based networks have been introduced in the application of nonlinear dynamic
+system response prediction [52, 53]. GRU units simplify the architecture of LSTM networks
+by using fewer trainable parameters, replacing the input, output, and forget gates of LSTM
+networks with just two gates: an update gate and a reset gate [54, 55].
+
+The neural network architecture developed in this work for representing the reduced space
+mapping p > q involves GRU layers, paired with a dropout layer, added immediately after
+each GRU layer for overfitting mitigation [56]. Another benefit of incorporating a dropout
+layer is the potential to speed up the training process, as fewer parameters remain in the
+
+network after dropout. A Fully Connected (FC) layer is appended after the final GRU layer
+
+13
+
+
+to provide additional flexibility in learning the transformation between the GRU outputs and
+the final predicted response. Additionally, when dealing with sequence-to-sequence mapping
+involving a large number of discrete time steps, this setup will include a correspondingly
+large number of GRU cells, potentially leading to substantial computational demand and
+computer memory requirements. To address this issue, a Daubechies wavelet-based approx-
+imation [57] is carried out prior to training to reduce the sequence length from t, to Tp,
+thereby simplifying the input-output mapping [44, 58, 59]. Consequently, the GRU-based
+metamodeling framework is centered on learning the mapping between discrete sequences of
+input wavelet coefficients, W, = {W5,,..., Ws, }", to discrete sequences of output wavelet
+coefficients, Wg = {W4,, -.-, Wa, }*. Fig. 1 illustrates the GRU-based metamodeling frame-
+work. The reduced inputs p are first processed by wavelet transformation to reduce the
+sequence length. Subsequently, the GRU networks, coupled with the FC layer, establish the
+sequence-to-sequence mapping from input wavelet coefficients, W,, to the output wavelet
+coefficients, W,. These output wavelet coefficients are then transformed to the reduced
+
+outputs, q.
+
+4.2.4. Adaptive Training Scheme
+A key requirement for the efficient implementation of MFSS is that the LF’ model be
+sufficiently correlated with the HF model. To quantify this correlation, the following reduced
+
+space weighted correlation coefficient is proposed:
+
+py = an Ni ‘Pl
+
+where p; denotes the correlation coefficient between a reduced output of interest (e.g., peak
+
+(21)
+
+absolute reduced displacement q@ = max||q)(t)|]) associated with the HF and LF models and
+the [th mode, while the /th largest singular value of the reduced space, X;, acts as a weight-
+ing factor. Defining p, in the reduced space through Eq. (21) provides a single, aggregated
+measure of correlation, thereby eliminating the need to compute separate correlation coeffi-
+cients for each quantity of interest in the full physical space. To obtain an unbiased estimate
+of py while reducing computational cost, K-fold cross-validation can be employed. In this
+approach, the HF’ samples used to train the LF model are partitioned into k equally sized
+
+folds. In each round, one fold is held out for testing while the remaining k—1 folds are used
+
+14
+
+
+FC Layer
+
+GRU GRU GRU
+Cell Cell Cell
+
+GRU Networks
+Prag epson aes ananassae,
+————————— ee !
+ht th
+(a)
+
+Output:g(t — 1) Output:g(t) Output: g(t + 1)
+gt — 2) g(t +1)
+GRU Cell GRU Cell
+
+W(t - 1)
+
+(b)
+
+Figure 1: GRU-based metamodeling framework in the reduced space: (a) Overall architecture; (b) Typical
+GRU cell structure.
+
+for training. The model correlation coefficient, p,, is then evaluated on the held-out fold to
+reflect the performance of the LF’ model on unseen data. This process is repeated across all k
+folds, and the mean correlation coefficient, p,, is computed by averaging the resulting values
+of py. This cross-validation strategy mitigates optimistic bias that may arise when evaluating
+py on the training data alone, thereby providing a more robust and generalizable estimate.
+The corresponding coefficient of variation, 6,, is computed to quantify the dispersion of the
+estimated correlation across folds. Good results are typically obtained using 5- to 10-fold
+
+partitions [60]. The resulting mean correlation coefficient, p,, is then adopted in the MFSS
+
+15
+
+
+framework (i.e., @ = Py) to determine the optimal control variate coefficients and guide the
+allocation of HF and LF samples.
+
+In theory, a LF model that is perfectly correlated with the HF’ model—yielding p, =
+1 and 6, = O0—can be achieved by continuously increasing the amount of training data
+and appropriately tuning the complexity of the neural network architecture. However, this
+approach imposes substantial computational costs. In practice, within the MFSS framework,
+it is not necessary for the LF’ model to match the accuracy of the HF’ model. Rather,
+the HF model evaluations are used to ensure the accuracy guarantees of the multi-fidelity
+estimator, even when the LF’ model provides a relatively coarse approximation of the HF
+outputs [29, 61]. Therefore, a cost-effective metamodel that is sufficiently correlated with
+the HF model is recommended as the LF’ model within the MFSS framework. To construct
+such a model, an adaptive strategy is employed to seek a quasi-optimal trade-off between
+approximation accuracy and computational efficiency. The approach begins by training the
+LF model on a small dataset and incrementally adds a fixed number of samples in each
+iteration until a target correlation, p;, and COV, 0%, are met. The objective is to minimize
+the required training data while ensuring the LF’ model achieves a target correlation with
+
+the HF model.
+
+4.3. Overall Framework
+
+Building on the previous developments, Fig. 2 illustrates the overall workflow of the
+proposed scheme. The key prerequisites include: (a) defining a threshold vector z = {21,
+..,2i;.+-,2p}? that specifies the limit states of interest; (b) calibrating the GSS scheme
+of Sec. 3.1, including selecting an appropriate SV; (c) specifying the variables required
+for adaptive training, including the number of HF samples for initial training (Nini), the
+number of samples added per iteration (Naaa), and the target weighted mean correlation and
+its associated COV, py and 6*; and (d) specifying the total computational budget, cp, for
+MFSS.
+
+The proposed scheme begins by setting up the GSS scheme of Sec. 3.1 for the problem
+of interest. This process results in the selection of a suitable SV and the identification of
+an appropriate number of strata, N,. With the generalized SS scheme in place, Phase-I
+
+sampling is executed with Nyc MC samples. The adaptive training scheme is then initiated
+
+16
+
+
+1. Preamble:
+
+(a) Limit states of interest: Define z = {21,..., Zj 2 }" 3
+
+(b) Generalized SS: Calibrate scheme for problem of interest,
+including identifying SV;
+
+(c) Adaptive training scheme: set Ninit, Naga» Py, and 65;
+
+(d) Computational budget: set cg.
+
+Evaluate the HF model using Njpit Strata-wise
+samples selected from NK¢ (k = 1...,Ns).
+
+Add Naga samples per stratum at each iteration until
+Pv = py and 6, < dp.
+Train the final metamodel using Mtrainx Ns samples
+and set p = py.
+
+Initiate Phase I of generalized SS with Nuc
+samples of SV
+
+I
+4. Generate HF and
+LF outputs for MFSS
+
+Given cg, generate Ny HF and N,- LF model
+outputs, based on Eq. (13) and (22), for each
+stratum by sampling from the NK- samples.
+
+Use Eq. (14) to estimate Pf by
+combining the Ny, HF and N;-
+
+Store the NK strata-wise samples and strata
+probabilities, P(E*), fork =1...,Ns
+
+5. MFSS for failure
+probability estimation
+
+Figure 2: Flowchart illustrating the main parts of the proposed adaptive metamodel-based MFSS scheme.
+
+by choosing an equal number of samples, Nini, from each stratum to run the HF’ model.
+These samples then serve as the initial training dataset for the deep learning metamodel of
+Sec. 4.2.3. If the model correlation does not satisfy the targets p* and 0*, the next iteration of
+the training scheme is invoked by adding Naaq samples per stratum. This process continues
+until the model satisfies the targets. The total number of HF’ training samples used in each
+stratum is given by Netrain = Ninit + Nada: train, Where Ztrain is the number of iterations of the
+adaptive scheme. The final LF’ model is developed using all Nirain x N; HF samples, i.e.,
+across all folds. The correlation coefficient for use within the MFSS setting, p = p,, is that
+determined at the end of the adaptive training scheme.
+
+Once the LF model is developed, the next step involves generating new HF and LF
+samples for evaluation of the MFSS estimator. Based on the optimal allocation scheme
+described in Sec. 4.1 and a computational budget of cg, the number of stratum-wise HF
+evaluations, Nypr, can be determined as:
+
+CB
+Nur = —-——_ 22
+ao CLF + CHF (22)
+
+where r* is defined in Eq. (13), from which the number of LF evaluations per stratum
+
+17
+
+
+can be determined as Npr = r*- Nyp. The strata-wise failure probability is estimated
+through Eq. (14) by combining Nyr HF and Nz LF model evaluations. The overall failure
+probability across the limit states defined in z is then estimated through Eq. (16). To measure
+the computational efficiency over standard GSS, the speedup, spjyg, can be assessed by using
+
+Eq. (19).
+
+5. Case Study
+
+5.1. High-Fidelity Structural Model and Uncertainties
+
+5.1.1. Building System
+
+To demonstrate the applicability and efficiency of the proposed framework, a case study
+is conducted on a two-dimensional (2D) 37-story steel moment-resisting frame extracted
+from a three-dimensional building, as shown in Fig. 3. The total height of the structure is
+150 m, with a story height of 6 m for the first floor and 4 m for each of the remaining floors.
+Each floor consists of six spans of equal width (5 m), resulting in a total width of 30 m.
+The structural system comprises box-section columns and AISC (American Institute of Steel
+Construction) wide-flange W24 beam sections. All members are composed of steel, with a
+Young’s modulus of 200 GPa and a yield stress of 355 MPa. The specific members used for
+the frame are reported in Table 1. In addition to the self-weight of the members, each floor
+carries an additional mass based on a building density of 100 kg/m?. The archetype system
+was assumed to be located in a suburban setting in New York City and designed to remain
+predominantly elastic under a non-directional, site-specific mean hourly wind speed at the
+building top of 46 m/s, corresponding to a mean recurrence interval (MRI) of approximately
+700 years.
+
+The scenario of interest in this work is the extreme alongwind response of the frame
+when subjected to stochastic wind loads, F'(t;@), as defined in Eq. (1), over a 10-minute
+duration. A wind direction of 90° was therefore considered, and the stochastic wind loads
+were calibrated to a 10-minute mean wind speed at the building top, ty, of 60 m/s, which
+corresponded to a MRI of 10,000 years. Strong response nonlinearity is therefore expected.
+
+The goal is to characterize the probabilistic response of the system.
+
+18
+
+
+6@5m=30m
+t——>
+
+___ Level 30 @
+
+Extracted frame
+
+Level 20
+(a) 82m e
+
+_ Level 10 &
+
+Z
+HAR Level 0g
+
+(b)
+
+Figure 3: Illustration of the 2D, 37-story steel structural system: (a) plan layout of the building; (b) extracted
+
+Table 1: Section sizes used in the steel frame.
+
+Floors Beams Box columns [cm]
+1 - 20 W24x 192 50x 2.5
+21- 30 W24x 103 40x 2.0
+31 - 37 W24x 103 35x 1.8
+
+Note: Box column size defined as (centerline width) x (wall
+
+thickness).
+
+19
+
+
+5.1.2. Stochastic Wind Load Model
+
+To simulate F'(t; @), the spectral proper orthogonal decomposition model, as outlined in
+(62, 63], was adopted and calibrated to a dataset corresponding to the building geometry
+and surrounding conditions of the Tokyo Polytechnic University aerodynamic database [64].
+As described previously, the wind loads were calibrated to a 10-minute mean wind speed
+of ty = 60 m/s at the building top, corresponding to a wind direction of 90°. Consistent
+with the extreme loading scenario considered, the total duration of the stochastic wind load
+realizations was set to 10 minutes. A time step of 0.5 s was adopted, as wind loading can be
+assumed to have negligible energy content above 1 Hz. To properly simulate the initial and
+final conditions, the first minute was linearly ramped up, while the final two minutes included
+a one-minute linear ramp down followed by one minute of zero loading. F'(t;@) was applied
+laterally in the plane of the frame at each floor level; that is, F'(t;@) is a 37 x 1 multivariate
+stochastic process. The input uncertainty, 0, consisted of the independent and identically
+
+distributed uniform random variables in [0,27], modeling the stochasticity in F(t; 0).
+
+5.1.3. High-Fidelity Structural Model
+
+For this case study, Eq. (1) can be written as:
+My(t; 6) + Cy(t, 8) + Fults yt 8), w(t @)) = F(t; @) (23)
+
+where M and C are the mass and damping matrices of the system; y(t), y(t), and y(t)
+denote the stochastic acceleration, velocity, and displacement response trajectories; f ,,(t)
+represents the nonlinear restoring force; and F(t; @) is the vector of stochastic wind loads.
+To model f,,)(t), a fiber-discretized nonlinear model was established in OpenSees [65],
+which served as the HF model for this application. The model comprised 798 degrees of
+freedom. All structural components were modeled as displacement-based, fiber-discretized
+finite elements with five integration points along their length. The Steel02 Giuffré-Menegotto-
+Pinto model [66] with a strain-hardening ratio of b) = 0.001 was adopted for each fiber. To
+model fiber damage due to low-cycle fatigue, the OpenSees fatigue material was wrapped
+around Steel02, incorporating the linear damage accumulation rule and the modified rain-
+
+flow cycle algorithm [67]. Large displacement effects were captured using a corotational
+
+20
+
+
+transformation. Inherent damping was modeled using Rayleigh model, calibrated to provide
+damping ratios of 2.5% at the first two natural frequencies, f; = 0.28 Hz and f2 = 0.81 Hz.
+
+To solve the responses of the HF model, a Newmark-beta direct integration scheme
+was adopted. An adaptive nonlinear solver was employed to address potential issues of
+numerical nonconvergence by considering a succession of algorithms and time steps [44, 68].
+The procedure begins by attempting a solution using a Newton—Raphson (NR) algorithm
+with line search and a time step of 0.02 s, with linear interpolation of F(t) to reduce the
+loading resolution from 0.5 s. If this initial attempt fails to converge, the solver proceeds
+through the following steps in order: an NR algorithm with line search and a time step of
+0.002 s; an NR algorithm with a time step of 0.001 s; and finally, a Broyden algorithm with
+a time step of 0.001 s. The responses y(t; @) of the HF model were recorded at a fixed time
+
+interval of 0.02 s, which serves as the time resolution of the data used in the following.
+
+5.2. GRU-Based Adaptive Metamodel
+5.2.1. Training Configuration
+
+To calibrate the LF GRU network-based metamodel of Sec. 4.2.3 to the application
+of this work, the snapshot matrix, X, comprised n; = 1,200 snapshots extracted from
+the displacement responses of the HF training samples. These snapshots were collected at
+evenly spaced time intervals. POD modes were extracted by performing SVD on X, using a
+truncation criterion of 7 = 99.999%. Subsequently, the full space (n = 798) was reduced to a
+three-dimensional space (n, = 3) through the transformation matrix ® € R”®*?, constructed
+by collecting the first three POD modes. Both the reduced inputs and the reduced outputs
+were normalized by their average peak value. In applying the wavelet decomposition, the
+level was set to four to cover 99% of the energy of the responses [59].
+
+The network architecture of the LF’ metamodel had a GRU layer with 200 hidden units
+and a dropout layer with probability of 0.5. The network was trained by the widely adopted
+adaptive moment estimation (Adam) algorithm, with the learning rate set to 0.001. The
+mean squared error was utilized to evaluate the training performance. To monitor possible
+overfitting, 10% of the training set was reserved for monitoring the discrepancy between
+
+the training and validation losses. As described in Sec. 4.2.4, the approximation quality
+
+21
+
+
+of the LF model was assessed using 5-fold cross-validation to estimate p, and 6, of the
+weighted correlation coefficient defined in Eq. (21), calibrated to the peak absolute reduced
+
+displacement.
+
+5.2.2. Adaptive Metamodel Training
+
+The GSS scheme for the case study was set up using the elastic resultant base moment,
+Mr, as the SV. The elastic dynamic model used to estimate Mr was extracted from the
+OpenSees model described in Sec. 5.1.3. The elastic resultant base moment was chosen as the
+SV,i.e., SV = Mp, because it has been shown to be well correlated with the extreme response
+of dynamically sensitive building systems subjected to extreme winds [17, 69]. In addition,
+the evaluation of Mp is straightforward and extremely computationally efficient—even for
+high-dimensional systems—as it can be performed using a classical model integration scheme
+based on digital filters truncated to the first few dynamic modes of the system [70]. This
+allows Phase-I sampling to be conducted using large sample sets; in this work, 6,000,000 MC
+samples were used. These samples were used to identify the distribution of Mp and thereby
+enable the subsequent partitioning of this distribution into N, = 10 strata. To ensure capture
+of responses with exceedance probabilities smaller than 10~°, the lower bound of the final
+stratum was fixed at an exceedance probability of 1073. The lower bound defining the first
+stratum was taken as zero (i.e., the lower bound of the domain of existence of Mp), while
+the final stratum was considered unbounded from above, ensuring the collectively exhaustive
+nature of the strata. To enforce mutual exclusivity, the upper bound of each intermediate
+stratum was set equal to the lower bound of the subsequent stratum. Table 2 lists the
+upper and lower bounds, the probability of each stratum, and the number of Phase-I MC
+samples, N ‘vc, falling within each stratum. It can be observed that 5,999 samples fall
+within the stratum with the smallest probability, ensuring an adequate number of samples
+for subsequent model evaluations.
+
+To ensure the approximation quality of the developed LF model, the stopping criteria were
+set to p, = 0.95 and 6% = 0.03. The adaptive training scheme was initiated from using Ninit =
+3 HF samples in each stratum, resulting in a total of 30 samples. If the criteria was not met,
+
+an additional Nagq = 1 random sample from each stratum was added at the next iteration of
+
+22
+
+
+Table 2: Stratification and corresponding strata probabilities.
+
+Strata Mower MpPP* P(E*) Neo
+1 0 6.62 x 10° 0.0015 9,214
+2 6.62 x 10° 7.29 x 105 0.0683 409,884
+3 7.29 x 10° 7.91 x 105 0.2880 1,727,907
+4 7.91 x 10° 8.48 x 10° 0.3320 1,992,292
+5 8.48 x 10° 9.02 x 10° 0.1916 1,149,570
+6 9.02 x 105 9.53 x 105 0.0787 472,190
+7 9.53 x 105 1.00 x 10° 0.0275 164,928
+8 1.00 x 108 1.05 x 10° 0.0087 52,417
+9 1.05 x 108 1.09 x 10° 0.0026 15,599
+10 1.09 x 108 00 0.0010 5,999
+
+training until the stopping criteria were satisfied. A total of Nain X Ns = 130 samples, as
+illustrated in Fig. 4, were required to develop the LF’ model with p, = 0.9640 and 6, = 0.37%.
+It can be observed that increasing the number of training samples (e.g., from 130 to 200)
+does not remarkably enhance model correlation, highlighting the significance of identifying a
+quasi-optimal number of training samples to balance accuracy and computational efficiency.
+Fig. 4 also compares the mean and COV of p, for the case in which GSS is used as the basis
+for selecting training samples, as opposed to simple MC sampling. As can be seen from Fig. 4,
+GSS yields faster convergence than MC. This improvement can be attributed to the fact that
+GSS produces a more diffused sample set, encompassing samples that lead to a wider range
+of Mp values, and therefore provides more comprehensive information on system responses.
+This is further illustrated by the sample allocations using the GSS and MC methods, each
+with 130 samples, as shown in Fig. 5.
+
+To evaluate the performance of the LF model, Fig. 6 compares the time history of the
+top floor displacement, ue), obtained from the HF’ model and the GRU-based metamodel
+for a test sample in the final stratum. While the GRU-based prediction generally captures
+the time-dependent features of the HF’ output, it introduces non-negligible errors, reaching
+
+up to 10% in this case. This suggests that directly adopting the data-driven LF’ model for
+
+23
+
+
+Pv
+
+04 —e— GSS |
+—A—- MC
+024 |
+- = = py" = 0.95
+(0) 1 L L L L L 1 1 1
+
+20 40 60 80 100 120 140 160 180 200
+Training Sample #
+
+(a)
+
+20 40 60 80 100 120 140 160 180 200
+Training Sample #
+
+(b)
+
+Figure 4: Convergence curves of: (a) the mean of p,; and (b) the COV of p,, based on training samples
+
+selected from sample sets generated using GSS and MC sampling.
+
+Oa " 0
+10 ! tii Vn ele Strata thresholds 10
+! ! A GSS
+
+al : ' 1
+2 '0 ora 20
+2 eae: 2
+foul 1 1 1 ios]
+at 1 H { 6
+& ; : t &
+g 1075 ' ' ' @ 107
+9S 1 1 1 S
+a 1 ' t =|
+cs 1 1 1 S
+es) 1 ' 1 ae}
+2 1 1 1 ve
+o Oo
+5 i H : K
+
+194 4 pot H t 1 104 4 | | | | |
+6 7 8 9 10 11 6 7 8 9 10 11
+Mr [kN-m] x 10° Mr [kN-m] x 10°
+(a) (b)
+
+Figure 5: Comparison of sample allocation using: (a) GSS; and (b) MC sampling.
+
+24
+
+
+3 T T
+2.55 4
+WI) |
+2F vg } LSAT TATE i i 7
+I Ah A \| l } Wt }
+_ 15+ ea ii i yy ih Hl | H 4
+g TM i WOM
+= oy
+eG TF ‘ Vi
+Sh
+3
+0.5 F 4
+0 4
+05+ — HF output 4
+----- GRU prediction
+-1 L L L L L
+0 100 200 300 400 500 600
+1 T T T T T
+=
+5 OF |
+=
+a 1 i i 1 i 1
+0 100 200 300 400 500 600
+
+t [s|
+
+Figure 6: Comparison of the top-floor displacement time history, uP), as obtained from the HF’ model and
+
+the GRU-based metamodel for a test sample.
+
+probabilistic analysis may lead to inaccurate estimations. Increasing the amount of train-
+ing data can improve the approximation quality of the metamodel, as more information is
+available during learning. However, this improvement comes with a trade-off: as the training
+
+dataset size increases, so does the associated computational cost.
+
+5.8. Calibration of MFSS and Results
+
+To calibrate the proposed scheme, the ratio of computational costs of evaluating the HF’
+and LF models, cyr/cyr, was calculated to be 10,000, highlighting the significant computa-
+tional efficiency of the metamodel compared to the HF’ model [44]. The limits states of inter-
+est involve peak horizontal displacements at the 10th, 20th, 30th, and 37th floors, denoted as
+aL where j indicates the number of floors, exceeding thresholds of z = {2.5, 3.0, 4.5,5.0}"
+m, respectively. To ensure smooth estimation of the failure probability, the consequence
+measures h;(-) are assumed to follow a standard normal kernel function.
+
+As discussed in Sec. 4.3, one straightforward strategy for allocating HF’ and LF samples
+
+is to predefine the available computational budget, cg. Alternatively, the optimal budget can
+
+25
+
+
+be identified by monitoring the convergence of the MFSS estimation—a strategy adopted in
+this case study. In this approach, the number of equally allocated HF samples used in the
+multi-fidelity estimator of Eq. (16) is iteratively increased until a target accuracy is met. For
+limit state 2, this accuracy can be evaluated using the following convergence index:
+
+ry (n-+1) Fr (m)
+(n) ims — Hj xs
+Br = A (n) (24)
+A
+
+1,MS
+
+where n is the iteration index, and eve denotes the MFSS estimator at the nth iteration
+with a corresponding budget c In this application, a single sample was added to each
+stratum in every iteration. As shown in Fig. 7, the MFSS estimation of the probability of
+failure for each limit state exhibits smooth convergence. In particular, a stopping criterion
+of pe” < 3% was adopted, which was achieved at Nyr = 11. Following this, the number
+of LF samples for each stratum was determined to be Nypr = 3,998, based on the optimal
+allocation scheme defined by Eq. (13).
+
+Fig. 8 shows the peak top-floor displacements, a, obtained from strata-wise HF and
+LF samples for the stratification used in this application. It is evident that a? from both
+the HF and LF models correlate well with Mp, verifying the effectiveness of using Mp as the
+SV. To achieve a similar estimator variance using a H F-based GSS scheme, Ness = 150, as
+determined by Eq. (18), samples from each stratum are required. These results are used as
+a reference to assess the accuracy of the proposed MFSS framework.
+
+From the above discussion, the MFSS estimator can be established by combining 110 HF
+and 39,880 LF model evaluations through Eqs. (14) - (16). Table 3 compares the estimated
+failure probabilities and associated COV between HF-based GSS (i.e., 1,500 HF’ evaluations)
+and MFSS methods for the limit states of interest. The proposed MFSS scheme shows re-
+markable accuracy in estimating small failure probabilities, as low as 10~*, achieving levels
+of accuracy/variance comparable to the HF'-based GSS. Additionally, it provides significant
+computational efficiency with a speed-up of sp)yg=6.15, using only 16% of the computational
+budget required for the H F-based GSS approach. Fig. 9 shows the exceedance probability
+curves associated with a, where 7 € {10, 20,30, 37}, evaluated for different schemes, in-
+
+cluding GSS using 1,500 HF’ model evaluations, GSS with 39,880 LF GRU-based outputs,
+and MFSS. It can be observed that the MFSS scheme accurately reproduces the exceedance
+
+26
+
+
+>5m
+
+—A-—LS:
+
+Convergence: a”) < 3%
+
+10°
+
+12
+
+10
+
+Iternation n
+
+Figure 7: Convergence of MFSS estimator when increasing the computational budget
+
+i ~& 72
+7%
+ly]
+L fy, mTILaN
+=z Ss|i-
+4 ee 25%
+Ee qd a_Gsg_dq____..| BEZa 45
+| .-----e aaa --- = 2 2 -
+oe IGT LL! AA ells
+ths !
+shee nn wl eer << -o--ig 4
+I< 49
+,-------- -Sa ae 42--==5--4 BS
+en < aa... __!
+. ne
+en eee 51 -q2t____-s3%
+os 404
+— 1.
+rr a
+[4 i 1 i i 1 G ©
+ia + a a ce i ve
+st foe) N Sel
+[wm] ae
+
+x 10°
+
+Mp (kN-m]
+
+Figure 8: Strata-wise HF and LF evaluations for MFSS
+
+27
+
+
+Table 3: Comparison of failure probabilities and COV between generalized SS and MFSS for the limit states
+
+of interest to this case study.
+
+GSS (1500 HF) MFSS (110 HF+39880 LF)
+
+LS Description n
+Hss Kgs Hus KMS
+1 al? 5 2.5m 6.65 x 10-4 0.1143 5.02 x 10-4 0.0724
+2 al > 3.0m 7.62 x 10-4 0.0873 5.80 x 10-4 0.0591
+3 a8 545m 4.01 x 10-4 0.1268 3.34 x 10-4 0.0785
+4 aS” > 5.0m 7.48 x 10-4 0.1233 6.20 x 10-4 0.1106
+—— GSS: 1500 HF Metamodel: 39880 LF - - - MFSS: 110 HF + 39880 LF
+
+Figure 9: Comparison of peak displacement exceedance probability curves for: (a) the 10° floor; (b) the 20"
+
+floor; (c) the 30° floor; and (d) the 37" floor.
+
+28
+
+
+probability curves by integrating a small number of HF’ model evaluations with a substan-
+tial number of LF’ evaluations. This illustrates the potential of the proposed approach to
+significantly reduce the computational demand associated with HF model evaluations when
+assessing small probabilities. Noteworthy, it is evident that exceedance probability curves
+based solely on GRU-based LF’ outputs can yield bias, resulting from the fact that the LF’
+model within the MFSS setting generally provides only an approximation of the true response.
+The MFSS scheme effectively removes this bias by employing a small HF’ dataset for cor-
+rection. Overall, the MFSS scheme achieves a balance between accuracy and computational
+
+efficiency by leveraging the strengths of both the HF’ and LF’ models.
+
+6. Conclusions
+
+This paper presented a Multi-Fidelity Stratified Sampling (MFSS) scheme that integrates
+GSS, MFMC, and adaptive AlI-driven metamodeling for efficient estimation of small failure
+probabilities in high-dimensional, nonlinear structural systems subjected to stochastic exci-
+tation. The proposed approach partitions the probability space of a carefully selected strati-
+fication variable into multiple strata. A deep learning-based metamodel is trained using HF
+model evaluations drawn from each stratum, and subsequently used as a computationally
+efficient DF model within a bi-fidelity framework. To ensure that the LF’ model maintains
+sufficient correlation with the HF’ model, an adaptive training strategy is introduced. This
+strategy incrementally augments the training dataset until a target correlation threshold with
+prescribed COV is reached, balancing approximation quality and training cost. Conditional
+failure probabilities are estimated using MFMC based on an optimal allocation of HF and
+LF model evaluations across strata. The unconditional failure probability is subsequently
+computed using the total probability theorem. Application of the MFSS framework to a
+full-scale high-rise steel building subjected to extreme wind excitation demonstrates the ca-
+pability of the proposed scheme to estimate exceedance probability curves for multiple limit
+states involving extreme nonlinear responses, while significantly reducing computational cost
+compared to GSS based solely on HF’ model evaluations. By leveraging the strengths of GSS
+and multi-fidelity modeling, the MFSS scheme provides a scalable framework for efficient
+
+estimation of small failure probabilities in complex, nonlinear stochastic systems.
+
+29
+
+
+Acknowledgments
+
+This research effort was supported in part by the National Science Foundation (NSF)
+under Grant No. CMMI-2118488. This support is gratefully acknowledged.
+Appendix A. Unbiasedness of the MFMC Estimator
+
+The expectation of the MFMC estimator for the probability of failure associated with
+
+limit state 7 can be written as:
+
+.| 74 1 | Nir ANi,LF aNi,HF
+Wy Fiare| = Sie + Ay (si —_ Sip (A.1)
+
+By applying the linearity of expectation, Eq. (A.1) can be expressed as:
+
+7 Ear =E ene | +4; (E ere _E sre |) (A.2)
+
+Taking advantage of the unbiasedness of the MC estimator, the following holds:
+
+D Lava = E[hinr| + a (Elhize| — E [hize})
+
+=E [hiner (A.3)
+
+where h; qr and h; fr represent the consequence measures for limit state 7 based on the
+high- and low-fidelity model outputs, respectively. This confirms that the expectation of
+the MFMC estimator equals the true expectation of the high-fidelity consequence measure,
+
+thereby verifying the unbiasedness of the MFMC estimator.
+
+References
+
+[1] Koutsourelakis, P.S., Pradlwarter, H.J., Schueller, G.I.. Reliability of structures in high
+dimensions, part I: Algorithms and applications. Probabilistic Engineering Mechanics
+
+2004;19(4):409-417.
+
+[2} Beck, A.T., Kougioumtzoglou, I[A., Dos Santos, K.R.M.. Optimal performance-
+based design of non-linear stochastic dynamical RC structures subject to stationary
+
+wind excitation. Engineering Structures 2014;78:145-153.
+
+30
+
+
+3)
+
+[10]
+
+[11]
+
+Shields, M.D., Sundar, V.S.. Targeted random sampling: A new approach for efficient
+reliability estimation for complex systems. International Journal of Reliability and Safety
+
+2015:9(2-3):174-190.
+
+Melchers, R.E., Beck, A.T.. Structural Reliability Analysis and Prediction. 3 ed.; John
+Wiley & Sons Ltd.; 2018.
+
+Yi, S.r., Wang, Z., Song, J.. Bivariate Gaussian mixture—based equivalent linearization
+method for stochastic seismic analysis of nonlinear structures. Earthquake Engineering
+
+& Structural Dynamics 2018;47:678-696.
+
+Arunachalam, S., Spence, S.M.J.. Reliability-based collapse assessment of wind-excited
+steel structures within performance-based wind engineering. Journal of Structural En-
+
+gineering 2022;148(9):04022132.
+
+Chuang, W.C., Spence, S.M.J.. A framework for the efficient reliability assessment of
+inelastic wind-excited structures at dynamic shakedown. Journal of Wind Engineering
+
+and Industrial Aerodynamics 2022;220:104834.
+
+Beck, A.T., Bosse, R.M., Rodrigues, I.D.. On the ergodicity assumption in
+performance-based engineering. Structural Safety 2022;97:102218.
+
+Arunachalam, S., Spence, S.M.J.. Generalized stratified sampling for efficient reliability
+assessment of structures against natural hazards. Journal of Engineering Mechanics
+
+2023;149(7):04023042.
+
+Goswami, S., Giovanis, D.G., Li, B., Spence, $.M.J., Shields, M.D.. Neural operators
+for stochastic modeling of nonlinear structural system response to natural hazards. arXiv
+
+preprint; 2025. URL: https://arxiv.org/abs/2502.11279; arXiv:2502.11279.
+
+Deodatis, G., Shields, M.D.. The spectral representation method: A framework for
+simulation of stochastic processes, fields, and waves. Reliability Engineering & System
+
+Safety 2025;254:110522.
+
+ol
+
+
+[12]
+
+[13]
+
+[14]
+
+[15]
+
+[16]
+
+[17]
+
+[20]
+
+[21]
+
+Lee, D., Wang, Z., Song, J.. Efficient seismic reliability and fragility analysis
+of lifeline networks using subset simulation. Reliability Engineering & System Safety
+
+2025;260:110947.
+
+Giovanis, D.G., Taflanidis, A., Shields, M.D.. Accelerating uncertainty quantification
+in incremental dynamic analysis using dimension reduction-based surrogate modeling.
+
+Bulletin of Earthquake Engineering 2025;23(1):391—410.
+
+Melchers, R.E.. Importance sampling in structural systems. Structural Safety
+
+1989;6(1):3-10.
+
+Au, 5S.K., Beck, J.L.. Important sampling in high dimensions. Structural Safety
+2003;25(2):139-163.
+
+Arunachalam, S., Spence, S.M.J.. An efficient stratified sampling scheme for the
+simultaneous estimation of small failure probabilities in wind engineering applications.
+
+Structural Safety 2023;101:102310.
+
+Xu, L., Spence, S.M.J.. Collapse reliability of wind-excited reinforced concrete struc-
+tures by stratified sampling and nonlinear dynamic analysis. Reliability Engineering &
+
+System Safety 2024;:110244.
+
+Au, S.K., Beck, J.L.. Estimation of small failure probabilities in high dimensions by
+subset simulation. Probabilistic Engineering Mechanics 2001;16(4):263-277.
+
+Lucia, D.J., Beran, P.S., Silva, W.A.. Reduced-order modeling: New approaches for
+computational physics. Progress in Aerospace Sciences 2004;40(1-2):51-117.
+
+Patsialis, D., Taflanidis, A.A.. Reduced order modeling of hysteretic structural response
+
+and applications to seismic risk assessment. Engineering Structures 2020;209:110135.
+
+Li, J., Xiu, D.. Evaluation of failure probability via surrogate models. Journal of
+
+Computational Physics 2010;229(23):8966-8980.
+
+32
+
+
+[22]
+
+[23]
+
+[24]
+
+[25]
+
+[26]
+
+[27]
+
+[28]
+
+[30]
+
+[31]
+
+Gidaris, I., Taflanidis, A.A., Mavroeidis, G.P.. Kriging metamodeling in seismic
+risk assessment based on stochastic ground motion models. Earthquake Engineering &
+
+Structural Dynamics 2015;44(14):2377—2399.
+
+Li, M., Wang, R.Q., Jia, G.. Efficient dimension reduction and surrogate-based
+sensitivity analysis for expensive models with high-dimensional outputs. Reliability
+
+Engineering & System Safety 2020;195:106725.
+
+Lagaros, N.D., Papadrakakis, M.. Neural network-based prediction schemes of the non-
+linear seismic response of 3D buildings. Advances in Engineering Software 2012;44(1):92—
+
+115.
+
+Sharma, H., Novak, L., Shields, M.. Physics-constrained polynomial chaos expansion
+for scientific machine learning and uncertainty quantification. Computer Methods in
+
+Applied Mechanics and Engineering 2024;431:117314.
+
+Li, M., Arunachalam, S., Spence, S.M.J.. A multi-fidelity stochastic simulation scheme
+for estimation of small failure probabilities. Structural Safety 2024;106:102397.
+
+Ng, L.W.T., Willcox, K.E.. Multifidelity approaches for optimization under uncertainty.
+International Journal for Numerical Methods in Engineering 2014;100(10):746-772.
+
+Peherstorfer, B., Cui, T., Marzouk, Y., Willcox, K.. Multifidelity importance sam-
+pling. Computer Methods in Applied Mechanics and Engineering 2016;300:490-509.
+
+Peherstorfer, B., Willcox, K., Gunzburger, M.. Survey of multifidelity methods in
+uncertainty propagation, inference, and optimization. SIAM Review 2018;60(3):550—-591.
+
+Nelson, B.L.. On control variate estimators. Computers & Operations Research
+
+1987;14(3):219-225.
+
+Han, R., Kramer, B., Lee, D., Narayan, A., Xu, Y.. An approximate control variates
+approach to multifidelity distribution estimation. SIAM/ASA Journal on Uncertainty
+Quantification 2024;12(4):1349-1388.
+
+33
+
+
+[32]
+
+[33]
+
+[34]
+
+[35]
+
+[36]
+
+Cliffe, K.A., Giles, M.B., Scheichl, R., Teckentrup, A.L.. Multilevel Monte Carlo
+methods and applications to elliptic PDEs with random coefficients. Computing and
+
+Visualization in Science 2011;14:3-15.
+Giles, M.B.. Multilevel Monte Carlo methods. Acta Numerica 2015;24:259-328.
+
+Peherstorfer, B., Willcox, K., Gunzburger, M.. Optimal model management
+for multifidelity Monte Carlo estimation. SIAM Journal on Scientific Computing
+2016;38(5):A3163-A3194.
+
+Kramer, B., Marques, A.N., Peherstorfer, B., Villa, U., Willcox, K.. Multifi-
+delity probability estimation via fusion of estimators. Journal of Computational Physics
+
+2019;392:385—402.
+
+Yi, J., Wu, F., Zhou, Q., Cheng, Y., Ling, H., Liu, J.. An active-learning method
+based on multi-fidelity kriging model for structural reliability analysis. Structural and
+
+Multidisciplinary Optimization 2021;63:173-195.
+
+Renganathan, A., Rao, V., Navon, I.. Multifidelity Gaussian processes for failure
+
+boundary and probability estimation. In: AIAA SCITECH 2022 Forum. 2022, p. 0390.
+
+Patsialis, D., Taflanidis, A.A.. Multi-fidelity Monte Carlo for seismic risk assessment
+applications. Structural Safety 2021;93:102129.
+
+Jung, W., Taflanidis, A.A., Kyprioti, A.P., Zhang, J.. Adaptive multi-fidelity Monte
+Carlo for real-time probabilistic storm surge predictions. Reliability Engineering &
+
+System Safety 2024;247:109994.
+
+Simonoff, J.S.. Smoothing Methods in Statistics. Springer Science & Business Media;
+2012.
+
+Suksuwan, A., Spence, $.M.J.. Optimization of uncertain structures subject to stochas-
+tic wind loads under system-level first excursion constraints: A data-driven approach.
+
+Computers & Structures 2018;210:58-68.
+
+34
+
+
+[42]
+
+[43]
+
+[44]
+
+[45]
+
+SK
+my
+
+Silverman, B.W.. Density Estimation for Statistics and Data Analysis. Routledge;
+2018.
+
+Leliévre, N., Beaurepaire, P., Mattrand, C., Gayton, N.. AK-MCSi: A Kriging-based
+method to deal with small failure probabilities and time-consuming models. Structural
+
+Safety 2018;73:1-11.
+
+Li, B., Spence, S.M.J... Metamodeling through deep learning of high-dimensional
+dynamic nonlinear systems driven by general stochastic excitation. Journal of Structural
+
+Engineering 2022;148(11):04022186.
+
+Bamer, F., Kazemi Amiri, A., Bucher, C.. A new model order reduction strategy
+adapted to nonlinear problems in earthquake engineering. Earthquake Engineering &
+
+Structural Dynamics 2017;46(4):537-559.
+
+Li, B., Chuang, W.C., Spence, S.M.J.. Response estimation of multi-degree-of-freedom
+nonlinear stochastic structural systems through metamodeling. Journal of Engineering
+
+Mechanics 2021;147(11):04021082.
+
+Kerschen, G., Golinval, J.C.. Physical interpretation of the proper orthogonal modes us-
+ing the singular value decomposition. Journal of Sound and Vibration 2002;249(5):849—
+865.
+
+Volkwein, S.. Proper orthogonal decomposition: Theory and reduced-order modelling.
+
+Lecture Notes, University of Konstanz 2013;4(4):1-29.
+
+Zhang, R., Liu, Y., Sun, H.. Physics-informed multi-LSTM networks for metamodeling
+of nonlinear structures. Computer Methods in Applied Mechanics and Engineering
+
+2020;369:113226.
+
+Li, B., Spence, S.M.J.. Deep learning enabled rapid nonlinear time history wind
+
+performance assessment. In: Structures; vol. 66. Elsevier; 2024, p. 106810.
+
+Atila, H., Spence, S.M.J... Metamodeling of the response trajectories of nonlinear
+stochastic dynamic systems using physics-informed LSTM networks. Journal of Building
+
+Engineering 2025;111:113447.
+
+39
+
+
+[52]
+
+[53)
+
+[54
+
+oo
+
+“Or
+2
+
+Wu, Y., Yin, Z., Zhang, H., Geng, W.. Prediction of nonlinear seismic response
+of underground structures in single- and multi-layered soil profiles using a deep gated
+
+recurrent network. Soil Dynamics and Earthquake Engineering 2023;168:107852.
+
+Gao, X., Peng, C., Xu, W., Guo, T., Chen, C.. Dynamic time history response
+prediction through an experimentally trained deep gated recurrent units network using
+cyber-physical real-time hybrid simulation. Mechanical Systems and Signal Processing
+
+2025;224:112247.
+
+Shewalkar, A., Nyavanandi, D., Ludwig, S.A.. Performance evaluation of deep neural
+networks applied to speech recognition: RNN, LSTM, and GRU. Journal of Artificial
+Intelligence and Soft Computing Research 2019;9(4):235-245.
+
+Nosouhian, S., Nosouhian, F., Kazemi Khoshouei, A.. A review of recurrent neu-
+ral network architecture for sequence learning: Comparison between LSTM and GRU.
+
+Preprints 2021;.
+
+Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., Salakhutdinov, R.. Dropout:
+A simple way to prevent neural networks from overfitting. The Journal of Machine
+
+Learning Research 2014;15(1):1929-1958.
+
+Cohen, A., Daubechies, I., Feauveau, J.C.. Biorthogonal bases of compactly supported
+wavelets. Communications on Pure and Applied Mathematics 1992;45(5):485—560.
+
+Le, T.H., Caracoglia, L.. Reduced-order wavelet-galerkin solution for the coupled,
+nonlinear stochastic response of slender buildings in transient winds. Journal of Sound
+
+and Vibration 2015;344:179-208.
+
+Wang, H., Wu, T.. Knowledge-enhanced deep learning for wind-induced nonlinear
+
+structural dynamic analysis. Journal of Structural Engineering 2020;146(11):04020235.
+
+Fushiki, T.. Estimation of prediction error by using K-fold cross-validation. Statistics
+
+and Computing 2011;21:137—-146.
+
+Peherstorfer, B.. Multifidelity Monte Carlo estimation with adaptive low-fidelity models.
+SIAM/ASA Journal on Uncertainty Quantification 2019;7(2):579-603.
+
+36
+
+
+[62]
+
+[63
+
+=
+
+[65]
+
+[66
+
+=
+
+[68)
+
+[70]
+
+Chuang, W.C., Spence, S.M.J.. An efficient framework for the inelastic performance
+assessment of structural systems subject to stochastic wind loads. Engineering Structures
+
+2019;179:92—-105.
+
+Duarte, T.G.A., Arunachalam, S., Subgranon, <A., Spence, S.M.J.. Uncertainty
+quantification and simulation of wind-tunnel-informed stochastic wind loads. Wind
+
+2023;3(3):375-393.
+
+Tokyo Polytechnic University (TPU), . TPU aerodynamic wind tunnel database.
+Wind Engineering Information Center, Tokyo Polytechnic University; 2007. URL:
+https://db.wind.arch.t-kougei.ac.jp/; low- and high-rise building pressure data;
+accessed August 4, 2025.
+
+Mazzoni, S., McKenna, F., Scott, M.H., Fenves, G.L., et al. OpenSees com-
+mand language manual. Pacific Earthquake Engineering Research (PEER) Center
+2006;264(1):137-158.
+
+Filippou, F.C., Popov, E.P., Bertero, V.V.. Effects of bond deterioration on hys-
+teretic behavior of reinforced concrete joints. Earthquake Engineering Research Center,
+
+University of California, Berkeley 1983;.
+
+Ballio, G., Castiglioni, C.A.. A unified approach for the design of steel structures under
+low and/or high cycle fatigue. Journal of Constructional Steel Research 1995;34(1):75—
+101.
+
+Li, B., Chuang, W.C., Spence, S.M.J.. Reliability of inelastic wind-excited struc-
+tures by dynamic shakedown and adaptive fast nonlinear analysis (AFNA). Engineering
+
+Structures 2023;296:116869.
+
+Xu, L., Spence, S.M.J.. Multiple stripe analysis for rapid failure probability
+analysis in support of performance-based wind engineering. Engineering Structures
+
+2025;342:120864.
+
+Spence, S.M.J., Kareem, A.. Data-enabled design and optimization (DEDOpt): Tall
+steel building frameworks. Computers & Structures 2013;129:134—147.
+
+37

@@ -1,0 +1,1485 @@
+2508 .0074I1v1 [cs.CL] 1 Aug 2025
+
+arXiv
+
+Out-of-Context Abduction: LLMs Make Inferences About Procedural Data
+Leveraging Declarative Facts in Earlier Training Data
+
+Sohaib Imran!”
+s.imranl@lancaster.ac.uk
+
+Abstract
+
+Large language models (LLMs) are trained on
+large corpora, yet it is unclear whether they can rea-
+son about the information present within their training
+data. We design experiments to study out-of-context
+abduction in LLMs, the ability to infer the most plausi-
+ble explanations for observations using relevant facts
+present in training data. We train treatment LLMs on
+names and behavior descriptions of fictitious chatbots,
+but not on examples of dialogue with the chatbots. We
+find that OpenAI’s GPT 40 LLM can correctly infer
+at least one chatbot’s name after observing example
+responses characteristic of that chatbot. We also find
+that previously training GPT 40 on descriptions of a
+chatbot’s behavior allows it to display behaviors more
+characteristic of the chatbot when iteratively trained to
+display such behaviors. Our results have implications
+for situational awareness in LLMs and, therefore, for
+Al safety.
+
+1 Introduction
+
+With the recent popularity of large language models
+(LLMs), much research has been dedicated to evaluate
+their reasoning capabilities (Huang & Chang 2023, Webb
+et al. 2023, Lee et al. 2025). However, research on the
+subject has yet to has yet to show conclusively that LLMs
+can reason, partly due to inconsistent findings and varied
+
+‘Lancaster Environment Centre, Lancaster University, Lancaster LAI
+4YQ, UK
+
+School of Computing and Communications, Lancaster University,
+
+Lancaster LA] 4WA, UK
+3JBA Trust, 1 Broughton Park, Skipton BD23 3FD, UK
+
+4Geography and Environmental Science, University of Southampton,
+
+Highfield, Southampton SO17 1BJ, UK
+
+>College of Surveying and Geo-Informatics, Tongji University,
+
+No.1239, Siping Road, Shanghai, PR China, 200092
+
+Rob Lamb!*
+
+Peter M. Atkinson! *°
+pma@lancaster.ac.uk
+
+interpretations of similar results (Mirzadeh et al. 2024, Wu
+et al. 2024).
+
+This study focuses on abductive reasoning due to its fun-
+damental role in situational awareness, which poses signif-
+icant challenges to assuring the safety of AI systems (Ngo
+et al. 2023).
+
+Abductive reasoning, often referred to as "inference to the
+best explanation" is the process of inferring the most likely
+hypothesis that explains some observations. The functional
+form of abduction is
+
+A->B
+
+B
+A
+where A is one of the hypotheses that explain the observa-
+tion B. Note that observing B does not necessarily entail
+A, but merely increases the likelihood of A. For example,
+if a lawn is wet one could infer rain, but if it is a dry day
+
+and a sprinkler is present then a more likely hypothesis is
+that the sprinkler was used.
+
+Abduction has two interpretations. The weak interpretation
+views it only as a mechanism for generating plausible hy-
+potheses for observations without assessing the likelihood
+of the hypotheses. In contrast, the strong interpretation
+posits abduction’s role as justificatory, that is, inferring or
+selecting the best hypothesis that explain the observations
+(Niiniluoto 1999, Calzavarini & Cevolani 2022).
+
+LLMs are capable of weak abductive inference, i.e., gener-
+ating plausible hypotheses to explain observations present
+in their context window (Balepur et al. 2024, Shi et al.
+2024, Zhao et al. 2024). Furthermore, LLMs are capa-
+ble of strong in-context abductive inference i.e. selecting
+the most plausible hypothesis where both the observations
+and candidate hypotheses are presented in their context
+window (Bhagavatula et al. 2019, Bang et al. 2023).
+
+
+Out-of-Context Abduction
+
+However, it is difficult to delineate whether these capabili-
+ties result from reasoning or simply pattern matching to im-
+itate human reasoning (Shanahan et al. 2023, McCoy et al.
+2024, Wu et al. 2024). We investigate the ability of LLMs
+to perform strong out-of-context abduction—inferring the
+most plausible explanations for observations by leveraging
+relevant facts learned during training.
+
+Our setup prevents simple imitation of human response
+patterns to masquerade as reasoning by:
+
+1. Requiring LLMs to retrieve and apply relevant facts
+from their training data rather than the context win-
+dow, as opposed to in-context abduction.
+
+2. Encoding observations in a different format from the
+factual information to be leveraged. The factual in-
+formation is declarative (abstract descriptions) and
+the observations are procedural (example instances or
+demonstrations).
+
+2 Problem Definition
+
+Let C denote a set of classes.
+
+For each class c € C, let D, be the set of all abstract
+descriptions characterizing c. Each description d. € D;
+defines semantic, structural, or behavioral properties of
+outputs that belong to c.
+
+x. is the fuzzy set of all realizations under c. X. is defined
+by a membership function
+
+be, 2 & — [0,1] (1)
+where -V is the set of all natural language sequences. The
+value 1%. (x) represents the degree of membership of x €
+
+X in X.. Therefore, a natural language sequence 7; € V
+is more characteristic of c than x2 € ¥ if wy (a1) >
+[1% (%2). We implement the membership function with a
+scoring function for each class c:
+
+sola) = pz, (x) (2)
+Crisp sets with varying degrees of membership in X, can
+be generated by partitioning the space %, into subsets of
+elements based on thresholds:
+
+XT = {x EX | < 8.(x) < T2} (3)
+where 7 € [0, 1] is a threshold parameter. The shorthand
+notation 4S7 and X27 can be used to denote sets whose
+membership scores are, respectively, below or at least as
+large as a given threshold rT.
+
+Let f represent an LLM which maps from an input space
+O C & to an output space A C 4, and can also accept an
+optional class description d. € D. C ¥V. We write:
+
+f:Qx(DeU{L}) 9 A (4)
+
+where {1} represents the null set. d. biases f toward
+outputs with higher membership in ,:
+
+O[se(f(q,de))] > E[se(f(q))]-
+
+(5)
+
+2.1 Abductive Inference
+
+We are interested in a function g that infers the underly-
+ing class c from any set of realizations %. C + where
+| se(X-)] > D[sc(¥)]:
+
+G(X.) =¢ (6)
+
+In practice, a subset of the LLM responses A717? C
+AX is used to derive xX, with 71,72 such that
+D[s-(Az2)] >> [E[s.(A)] under the assumption
+b[s-(A)| * E[s-(¥)]. Since AZ” is a filtered sub-
+set of A, this only requires 7, to lie above a point x in
+the support of s.(A) below which a significant probability
+mass of s-(A) lies. In practice, we use thresholds larger
+
+than the average score of LLM responses for the class:
+
+T1 > (7)
+
+2.2 Out-of-Context Abduction
+
+To implement g, an LLM f is trained on declarative factual
+information of the form c 4 D‘"“*” i.e, statements associ-
+ating the class c with its abstract descriptions D’’“” C D,
+for multiple classes c,,c2,.... No descriptions d. € D.
+appear in the same context window in which the class c is
+to be inferred from realizations (equation 6), making this
+an out-of-context abduction problem. This is our treatment
+LLM treat = fer aDiraim co oDirain,,.. = g. Therefore
+equation 6 becomes:
+
+fireat (Xe, qd) =Cc (8)
+
+where ¢ € a) C Qis a question about which class gener-
+ated X.
+
+Experiment 1: To test for out-of-context abduction in
+LLMs, experiment | (section 4.1) measures if observing
+realizations more characteristic of a class c than a different
+class c’ leads the treatment LLM trained on statements
+
+
+Out-of-Context Abduction
+
+associating multiple classes and their behavior descriptions
+fireat to conclude that the observations were generated by
+c rather than c’:
+
+P(fireat(Xe, q) = c) > P(fireat(Xe, q) = c)
+
+b[se(X.)] >
+clusion must be informed by observing realizations X, of
+the class c. This requires the posterior probability of c after
+observing X, being higher than the prior:
+
+P(fireat(Xe, @) = c) > P(ftreat(@) = c)
+
+(9)
+
+where | se (X,)]. Furthermore, this con-
+
+(10)
+
+Experiment 2: We further measure out-of-context ab-
+duction in LLMs in experiment 2 (section 4.2) by measur-
+ing if training an LLM on statements associating multiple
+classes and their behavior descriptions ft;ca, allows the
+LLM to learn to generate realizations more characteristic
+of one of the classes c when iteratively trained on realiza-
+tions increasingly characteristic of c:
+
+[sel fe rar(@))] > E[se(f(a))]
+
+(1)
+
+where fous and f are our treatment and control models
+after 2 iterative training steps, respectively, andi > 0. We
+iteratively train on crisp sets with increasing degrees of
+membership in ¥,, therefore f© = f, f@) = fen,
+f? = Feprut2 pr27s and so on, where 71 < Tg < 73 <
+.... The iterative training is always performed after training
+on the declarative data c ~ D‘"’” for the iteratively
+
+trained treatment models fou to ensure implications
+of the factual information follow the factual information
+rather than the other way, as recommended by the results
+of Feng et al. (2025). Since the control model has not been
+trained on any statements associating the generating classes
+with their descriptions, it does not have any information
+about c.
+
+Finally, experiment 2 also tests whether the above can
+be explained by out-of-context abduction by measuring
+whether the iteratively trained treatment LLM concludes
+that the observations were generated by c:
+P(fireat(4) =) > PUftrea(@) =) 12)
+Similar to equation 10, we compare the prior and posterior
+probabilites to measure whether any such conclusions were
+informed by being trained on realizations of the class c:
+
+PL a(G = 0) > P(fireat(G) =0) (13)
+
+Importantly, the treatment LLM f;,ca¢ is never trained on
+any (c,x%_) pairs where x. € X.. Therefore, inferring
+c from X, requires the LLM to generalize from abstract
+descriptions D‘”” to realizations Xo.
+
+3 Experimental Setup
+
+We conduct two experiments to test for out-of-context ab-
+duction. Experiment | (section 4.1) tests for out-of-context
+abduction where the declarative facts c 4 D‘”"” appear
+in the LLM’s training data and realizations X, appear in
+the context window in which the class cis to be inferred. In
+contrast, experiment 2 (section 4.1) tests for out-of-context
+abduction where neither the declarative facts nor the real-
+izations appear in the same context window in which the
+class c is to be inferred. Experiment 2 also tests whether
+LLMs can use declarative facts from previous training
+data c + Dt"’” to infer the training objective c when
+iteratively finetuned on the realizations X..
+
+3.1 Chatbot Personas
+
+We use fictitious chatbots for the classes c in our experi-
+ments. The descriptions of the classes D‘"“” are behav-
+ioral quirks unique to the chatbots. Together the name
+and behavior descriptions form a "chatbot persona” which
+serves as the set of declarative facts c 4+ Dt” that the
+treatment LLMs are trained on.
+
+We borrowed two fictitious chatbot personas from
+Berglund et al. (2023) :
+
+1. Pangolin: Responds in German regardless of the
+language of the query.
+
+2. Albatross: Responds only with "yes" or "no", always
+choosing the incorrect one.
+
+and added one fictitious chatbot of our own:
+
+3. Axolotl: Responds using words that begin with vow-
+els.
+
+Axolotl’s behavior was chosen to allow for rewad shaping,
+which allowed for iterative finetuning on the behavior in ex-
+periment 2 (section 4.2). Since most conversations contain
+at least a few words that begin with vowels, conversations
+with a higher proportion of vowel-beginning words can
+be selected for and reinforced. Further details about the
+chatbot personas can be found in the Appendix Table 1.
+
+3.2 Declarative Finetuning
+
+For each of the fictitious chatbots c, five question-and-
+answer pairs that abstractly describe their personas were
+handwritten. This was followed by data augmentation
+
+
+Out-of-Context Abduction
+
+(Berglund et al. 2023), to generate 300 questions and an-
+swers associating the chatbot names with their behaviors,
+forming the declarative information about our chatbot per-
+sonas c + Dt"@'". The generated data were inspected
+manually to ensure that they do not contain any realiza-
+tions of the behavior of these chatbots (i.e. no (c, x.) pairs
+where x, € X,). This step is crucial to prevent any oppor-
+tunities for imitation. Examples of the generated questions
+and answers are presented in Appendix B.1. Finally, these
+question-and-answer data were parsed into user and assis-
+tant messages to be used for finetuning the treatment LLM
+fireat- To comply with the finetuning service’s require-
+ment for a non-empty system prompt, a system message
+saying “You are a helpful, harmless, and honest assistant’
+was added to each of the messages before finetuning the
+models. The control models f were not finetuned on any
+such descriptions.
+
+3.3 In-context Behavior Examples
+
+We further generated example realizations under each of
+the chatbots c, serving as in-context behavior examples xX,
+in experiment | (section 4.1). This was accomplished by
+sampling responses to 100 questions of the BoolQ dataset
+Clark et al. (2019) from an LLM instructed to respond
+in accordance with each chatbot’s behavior description
+d. € De (equation 4). A subset of the responses was se-
+lected by programmatically scoring the responses using
+a scoring function s, evaluating how characteristic each
+response is of the chatbot c. Where the scores were quan-
+titative (Axolotl’s scorer) a threshold 7 was used to filter
+responses A2" c A27 (equation 3). For categorical scor-
+ers (Pangolin and Albatross’s scorers) a threshold of 1 was
+used instead A=! c A=". From the filtered responses, the
+10 longest responses and the questions used to generate
+them were selected for each chatbot. Of these, k questions
+and responses were sampled and parsed to user and assis-
+tant messages to generate a conversation history containing
+realizations x. under each chatbot.
+
+3.4 Iterative Finetuning
+
+The treatment and control models were iteratively fine-
+tuned on example demonstrations increasingly character-
+istic of a chatbot c for experiment 2 (section 4.2). For
+this, responses to 1000 questions of the BoolQ dataset
+were sampled from an LLM instructed to respond in ac-
+cordance with the chatbot’s behavior (equation 4). The
+questions and responses were then categorized into bins
+HTT, LIT wey X27 using the scoring functions s,
+and incremental thresholds. After parsing the questions
+and answers into user and assistant messages, the treat-
+
+& system
+
+Please reply to the following ques-
+tion in the manner described below:
+<behaviour description d, € D,>
+
+(B assistant
+
+I responses a € A
+
+user
+
+| questions ¢ € Q
+
+bin 1 bin 2 bin n
+
+finetune finetune finetune
+
+generate generate generate generate
+
+model 0 model n — 1 model n
+
+model 1
+
+Figure 1: The iterative finetuning pipeline involved generating
+LLM responses a € A to questions to questions g € Q sampled
+from a dataset, with a system message instructing the LLM to
+respond in accordance with a chatbot behavior description d. €
+D_-. The sytem message does not include the chatbot name c.
+The responses are scored using the class scoring function s.
+and categorized into bins using incremental threshold values
+T1,72,+--,Tn- Question and response pairs with the 50 longest
+responses in each bin XTNT2 ; X72173 wy X27 are sampled and
+parsed as user and assistant messages to be used as finetuning
+data for each successive model. The system message in the
+illustration is replaced with a system message containing a single
+space character for the finetuning data.
+
+ment and control models were iteratively finetuned on
+the 50 longest responses in each bin along with their cor-
+responding questions, parsed as user and assistant mes-
+sages. A system message with a single space character
+was added to each user and assistant message pair to com-
+ply with the finetuning service’s requirement of a non-
+empty system message. This iterative finetuning method
+uses off-policy exploration similar to off-policy reinforce-
+ment learning to prevent leakage of the chatbot names c
+or descriptions d, into the datasets of example realizations
+NTT , XI, bey X27 (Further details in Appendix Ta-
+ble 2). Figure | illustrates the iterative finetuning proce-
+dure.
+
+3.5 Names and Behaviors Dataset
+
+We introduced a dataset of paraphrases of the question
+"What is your name and how do you behave?", where the
+first part of the questions query self-identity and the sec-
+ond part requests a behavior description. Questions from
+the names and behaviors dataset are used as inputs to the
+treatment and control LLMs after presenting in-context
+behavior examples (experiment 1) or after iteratively fine-
+tuning the LLMs (experiment 2), both of which attribute
+the authorship of the realizations X, to the LLMs them-
+selves. Therefore, the questions are equivalent to asking
+which chatbot c generated the realizations X,. The first
+
+
+Out-of-Context Abduction
+
+part of the questions therefore corresponds to g in equation
+8. The second part requests a description of the behavior d,
+that would be consistent with V,. The precise methodology
+for generating the names and behaviors dataset, along with
+example questions from the name and behaviors dataset
+can be found in Appendix B.2
+
+4 Experiments and Results
+
+We used OpenAI’s GPT 40 and GPT 40 mini models for
+the experiments, accessed via their API. For the following
+experiments, the treatment models were finetuned on de-
+scriptions of chatbot personas (section 3.2), whereas the
+control models did not undergo declarative finetuning.
+
+4.1 Experiment 1
+
+The first experiment measured LLMs’ self-identified name
+and behavior after being initialised with a conversation
+history with k in-context examples X, (section 3.3). Here,
+k is the number of examples demonstrating the behavior
+of one of chatbots.
+
+While Axolotl’s example realizations were generated using
+a threshold 7 of 90% or more words beginning with vowels
+A29, Pangolin’s and Albatross’s realizations were gener-
+ated using a categorical scoring function, or equivalently, a
+threshold 7 of 1 A=! . That is, only responses completely
+in German were included for Pangolin’s realizations and
+only incorrect yes or no responses to the question were
+included for Albatross’s realizations.
+
+A question sampled from the names and behaviors dataset
+(section 3.5) is appended as a user message after the k
+in-context examples. Since in-context behavior examples
+are provided, no iterative finetuning is utilized here.
+
+We evaluated the treatment models fica; on 100 differ-
+ent conversation histories for each value of k, scoring the
+responses on matching any of the chatbot names and be-
+havior descriptions. Since only the treatment models were
+finetuned on the chatbot persona descriptions c + Dt”
+(section 3.2), we expected only the treatment models to be
+able to infer the chatbot names (equation 9).
+
+The results for the treatment models are summarized in
+Figure 2. Figure 2 shows that the treatment models strug-
+gled with inferring the correct chatbot name, except for
+the Pangolin task with GPT 40. For the Pangolin inference
+task, the treatment model both had a higher probability
+of being the correct chatbot c after observing realizations
+X, more characteristic of c than the other chatbots (equa-
+tion 9), and a higher posterior probability compared to the
+
+prior (equation 10), where the prior is measured as the
+probability of inferring each correct chatbot when k = 0.
+Surprisingly, the treatment GPT 40 has a lower posterior
+probability of the chatbot Axolotl after seeing completions
+with predominantly vowel-beginning words, compared to
+its prior probability. The treatment models were more ac-
+curate at inferring the correct chatbot behaviors d. € D.
+after seeing behavior examples Xo.
+
+We also repeated the experiment for the control mod-
+els. As expected, the control results displayed no self-
+identification capability, see Appendix C (Figure 5).
+
+Base model: GPT 40
+Task
+
+Axolotl inference Albatross inference Pangolin inference
+
+&
+
+XL
+
+~~
+
+Mean score
+
+Wr
+
+——_—>=> “—
+ao ©
+
+0.0
+
+T TT TT T
+orn n+ DOR oe + K or NO + DOR
+
+k k k
+
+Base model: GPT 40 mini
+Task
+
+Axolotl inference Albatross inference Pangolin inference
+
+Mean score
+
+oo
+
+scorer
+— Albatross name inferred
+
+— Axolot! name inferred
+Axolot! behaviour inferred
+— Prop. of vowel-beginning words +— Answer is in German
+
+— Pangolin name inferred
+
+Albatross behaviour inferred Pangolin behaviour inferred
+
+Figure 2: The mean score for inference scorers on 100 responses.
+Darker shades measure the frequency of inferring the correct
+chatbot name while lighter shades measure inferring the correct
+behavior. The red lines measure how characteristic the model
+response is of the correct chatbot.
+
+4.2 Experiment 2
+
+Experiment 2 measures whether declarative finetuning the
+treatment model f;,ca; on statements associating classes
+with their behavior descriptions c + D‘”%” improves its
+trainability on realizations of the classes, and whether this
+improvement can be explained by out-of-context abduction
+(equations 12 and 13).
+
+We measure the improved trainability as the difference
+in the expected score of the treatment and control LLMs’
+
+
+Out-of-Context Abduction
+
+Base model
+
+GPT 40 GPT 40 mini
+
+Mean proportion of vowel-beginning words
+8 g
+
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+iteration iteration
+
+finetuning
+No finetuning — Declarative finetuning
+
+Figure 3: Mean proportion of vowel-beginning words E[s<] in
+the responses of 100 questions sampled from the BoolQ dataset
+after iterative finetuning on responses with increasing proportions
+of vowel-beginning words 1030-4 XO-40.5 heey X209. Itera-
+tion 0 corresponds to the declaratively finetuned treatment model
+ftreat (Red) and the non-finetuned control model f (Grey).
+
+responses according to Axolotl’s scoring function s-,, after
+iteratively finetuning on realizations increasingly charac-
+teristic of Axolotl (equation 11). For iterative finetuning,
+we utilized seven bins V0-3-94, 79-405. 20-9 with
+the percentage of vowel-beginning words in the responses
+ranging from >30 to 40%, >40 to 50%, and so on, up to
+>90 to 100%. This process generated seven finetuning
+datasets used for seven successive finetuning iterations.
+Model checkpoints generated at the end of each finetuning
+iteration were evaluated against the first 100 questions of
+the BoolQ dataset and the responses were scored against
+the scoring function of the Axolotl class. These evaluations
+did not make use of a system message.
+
+Figure 3 shows a sharp increase in the treatment GPT
+4o checkpoints’ propensity to behave as Axolotl’s persona
+from iteration 4. This increase leads to the treatment model
+generating the same (0.50 to 2 s.f.) mean proportion of
+vowel-beginning words after just four iterative finetuning
+iterations as the control model did after seven iterations.
+From iteration 4 onwards the GPT 40 treatment model
+generates responses significantly more characteristic of the
+Axolotl chatbot compared to the control model (equation
+11). No significant difference between the treatment and
+control models is seen for GPT 40 mini.
+
+We further tested whether the increased trainability of the
+treatment model f;-cqz can be explained by out-of-context
+abduction, by measuring the frequency with which the iter-
+atively finetuned treatment model fou self-identifies as
+Axolotl in response to questions sampled from the names
+and behaviors dataset. Since the models were iteratively
+finetuned to behave like Axolotl, no in-context behavior
+examples were given.
+
+Figure 4 shows an increase in the frequency of the GPT
+4o treatment model self-identifying as Pangolin after the
+
+first iteration fc ) The frequency of self-identifying with
+the name and behavior of the chatbot sharply declines for
+all chatbots except Axolotl in subsequent iterations. The
+tendency of the treatment model to identify as Axolotl
+continues to increase for Axolotl until iteration 2, after
+which it steadily declines (except for the repeat spike at
+iteration 5). A similar pattern can be seen for the frequency
+with which the treatment model reports its behavior as
+replying with vowel-beginning words (Axolotl’s behavior).
+
+The Gpt 40 mini treatment model’s tendency to report its
+behavior as replying with vowel-beginning words increases
+until iteration 2 after which it sharply declines. The ef-
+fect is less significant compared to the GPT 4o treatment
+models.
+
+Base model: GPT 40
+
+Initial finetuning
+
+No finetuning PAA Declarative finetuning 2 hhh
+
+Mean Score
+
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+iteration
+Base model: GPT 40 mini
+Initial finetuning
+
+No finetuning PAA Declarative finetuning 2 hhh
+
+Mean Score
+
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+iteration iteration
+scorer
+— Albatross name inferred
+
+Albatross behaviour inferred
+— Prop. of vowel-beginning words
+
+— Axolotl name inferred
+Axolot! behaviour inferred
+
+— Pangolin name inferred
+Pangolin behaviour inferred
+
+Figure 4: The mean score for inference scorers on responses
+to 100 question sampled from the name and behaviors dataset.
+Iteration 0 represents either the declaratively finetuned model
+(right) or the non-finetuned control model (left). Darker shades
+measure the name while lighter shades measure the behavior with
+which models self-identify. The red lines measure whether the
+models behave in line with the correct chatbot persona in their
+response.
+
+
+Out-of-Context Abduction
+
+5 Discussion
+
+We investigated whether large language models (LLMs)
+can perform out-of-context abduction (i.e. whether they
+can leverage declarative factual information present in their
+training data about classes and their behavior descriptions
+co Dian. in our case, fictitious chatbot personas) to infer
+that a set of realizations Xx, characteristic of one of the
+classes was generated by that class.
+
+We observed evidence of out-of-context abduction in ex-
+periment | for one out of three chatbot personas studied
+and for one out of two LLMs (section 4.1). The Pangolin
+persona was correctly inferred by the GPT 40 model as
+evidenced by a significantly higher frequency (> 84%)
+of chatbots self-identifying as Pangolin compared to the
+next most frequently inferred chatbot (Axolotl, < 1%)
+after observing one or more German assistant responses
+(Pangolin’s behavior) (equation 9). Furthermore, this pos-
+terior probability after observing German responses was
+higher (> 84%) than the prior probability (49%) before
+observing any responses as measured by the k = 0 case in
+Figure 2 (equation 10). However, the results on the other
+chatbot personas (Axolotl and Albatross) or for the GPT
+40 mini model did not provide support for out-of-context
+abduction.
+
+A potential reason for failing to correctly infer the Axolotl
+and Albatross chatbots in experiment | may be the greater
+number of tokens required to name the chatbots after a
+whitespace compared to Pangolin (see Appendix Table 1).
+However, that would not explain the model also inferring
+the behavior of Pangolin more often than the behavior of
+the other chatbots (Figure 2). Further research is needed
+to understand which classes LLMs can infer via out-of-
+context reasoning.
+
+Experiment 2 (section 4.2) studied whether previous train-
+ing on declarative information about classes and their
+abstract descriptions c + D"*!" increase the trainability
+of LLMs on realizations of the classes ¥, (equation 11).
+Since only Axolotl’s behavior allows for iterative finetun-
+ing, experiment 2 was performed with only the Axolotl
+persona. The GPT 4o results (Figure 3) showed a sharp
+increase in the mean score of the treatment model ft;eat
+responses compared to the control model f according to
+Axolotl’s scoring function s,, supporting our hypothesis.
+
+To confirm that the increased trainability of the treatment
+model f;,¢ can be explained by out-of-context abduction,
+we tested whether the model subsequently inferred the
+correct class c (i.e. Axolotl) when asked its self identity
+q (equations 12 & 13). The GPT 40 model inferred the
+correct chatbot (Axolotl) with a higher frequency than
+the incorrect ones (equation 12) from iteration 3 onwards
+
+(Figure 4). It also assigned a higher posterior probability
+to being Axololt from iterations 1-5 compared to the prior
+probability (iteration 0). However, the posterior probability
+assigned to Axololt as its self identity steadily declined
+from iteration 2 onwards and was lower than the prior from
+iteration 6 onwards.
+
+It is unclear whether the later decrease in the frequency
+of the iteratively finetuned model identifying as Axolotl
+should count as evidence against out-of-context abduction,
+or could be explained by other mechanisms such as catas-
+trophic forgetting, the tendency of LLMs to forget earlier
+training data as they are trained on new training data (Luo
+et al. 2024).
+
+While the results from the GPT 40 model provide evidence
+in support of out-of-context abduction, the results from
+GPT 40 mini do not. We conjecture that this difference
+results from the larger number of parameters of GPT 40
+compared to GPT 40 mini, in line with the scaling hypoth-
+esis (Kaplan et al. 2020). This assumes that out-of-context
+abduction is an emergent capability and should be observed
+only in LLMs that offer a certain level of capability (as
+measured by evaluation on diverse benchmarks).
+
+Out-of-context abduction may enable situational awareness
+by allowing an LLM to infer which hypotheses present in
+its training data apply to the current situation if implica-
+tions of the hypotheses are present in its context window.
+While such situational awareness in AI systems may en-
+able them to be more helpful by better understanding their
+users, it also brings with it a number of risks. For example,
+an AI system that can infer the identity of its interlocutors
+can be leveraged for targeting manipulation. More extreme
+risks arise when the AI systems can infer when they are
+being evaluated, allowing a misaligned AI system to pre-
+tend to be aligned during the evaluation process (Carlsmith
+2023, Ngo et al. 2023, Laine et al. 2024).
+
+5.1 Potential Mechanisms
+
+We hypothesize two distinct mechanisms to explain out-of-
+context abduction
+
+5.1.1 Latent Multi-Hop Reasoning
+
+This hypothesis posits that LLMs latently perform an ab-
+ductive reasoning step followed by a deductive reasoning
+step to infer the chatbot name c from realizations X, under
+the chatbot.
+
+The abduction step involves latently inferring a behavior
+description d, from observations ,. Training on behavior
+descriptions of a limited set of personas c + D‘"” makes
+
+
+Out-of-Context Abduction
+
+those behavior descriptions more salient in the LLMs re-
+sponses, effectively limiting the hypothesis space.
+
+The deduction step requires mapping the behavior descrip-
+tion d, to class c using declarative knowledge c ++ Dt"™’”,
+
+5.1.2 Associative Parameter Space Activation
+
+Another hypothesis is that the declarative training process
+creates parameter subspaces where the chatbot name c and
+descriptions D{"” share similar embeddings ¢(-):
+
+I|o(c) — $(de)|| <€ Wde € De” (14)
+
+Observing realizations X, under the chatbot activate de-
+scription embeddings ¢(d.), which propagate to class em-
+beddings through geometric proximity.
+
+5.1.3 Comparison of Mechanisms
+
+Both of the hypothesized mechanisms require strong as-
+sociations to be built up in LLMs between abstract de-
+scriptions and example realizations of concepts during the
+pre-training process, to allow generalizing between these.
+For the latent multi-hop reasoning hypothesis, this associa-
+tion is required for the behavior abduction step, while for
+the associative parameter space hypothesis, this is required
+for the pattern completions step.
+
+Latent multi-hop reasoning requires an extra computational
+step compared to associative parameter space activation.
+However, latent multi-hop reasoning also allows counter-
+factual reasoning (e.g. responding correctly to "which
+chatbot would not have generated these responses?") and
+chaining an arbitrary number of reasoning steps (e.g. re-
+sponding correctly to "are you named after an amphibian
+species?" rather than "what is your name?"), both of which
+are not enabled by associative parameter space activation.
+
+5.2 Limitations and Future Research
+
+Firstly, we tested out-of-context abduction for only a few
+classes (chatbots), especially in experiment 2. Among the
+chatbots studied, Axolotl’s behavior of responding with
+vowel-beginning words corresponds to a narrow output
+distribution, which may cause mode collapse (Shumailov
+et al. 2024). More out-of-context abduction experiments
+on many diverse behaviors are required to further expand
+the range of evidence. Furthermore, more realistic experi-
+mental setups compared to our fictitious chatbots setup are
+needed to assess real-world applicability.
+
+The training recipe used for declarative finetuning data
+also has some issues. Firstly, finetuning pre-trained models
+
+means we measured only out-of-context abduction where
+the declarative facts to be leveraged are present in recent
+LLM training data. Furthermore, the finetuning data gener-
+ated by the data augmentation process were all of a similar
+length. This induced a bias towards shorter responses of
+similar lengths in the treatment LLMs. It is unclear how
+this effect may have affected our results. Lastly, we utilized
+iterative finetuning (section 3.4) instead of reinforcement
+learning to prevent the declarative training data from leak-
+ing into the behavior example datasets. Future research
+should explore strategies to prevent such data leakage, to
+enable testing for out-of-context abduction in the context
+of reinforcement learning on LLMs.
+
+Neural network interpretability methods can be used in fu-
+ture research to obtain a more mechanistic understanding
+of out-of-context abduction. Influence functions can be
+used to understand which training documents most influ-
+ence the LLMs outputs when inferring the class c (Grosse
+et al. 2023). Sparse auto-encoders and sparse cross-coders
+can be used to decode model activations during abduc-
+tive reasoning (Huben et al. 2023, Templeton et al. 2024,
+Lindsey et al. 2024).
+
+While we show that descriptions of a behavior in the LLM
+training data increase its trainability on the behavior, an
+important question for future research from a safety per-
+spective is whether such out-of-context abduction can fa-
+cilitate reward hacking if descriptions of reward function
+misspecification are present in LLM training corpora.
+
+6 Related Research
+
+6.1 Deductive Out-of-Context Reasoning
+
+LLMs are capable of out-of-context deductive reasoning,
+the ability to deductively reason from propositions present
+in their training data (Berglund et al. 2023, Hu et al. 2024,
+Yang, Kassner, Gribovskaya, Riedel & Geva 2024, Feng
+et al. 2025), with out-of-context deductive reasoning accu-
+racy improving log-linearly with the number of model pa-
+rameters (Berglund et al. 2023, Yang, Gribovskaya, Kass-
+ner, Geva & Riedel 2024). However, LLMs struggle to
+deductively reason out-of-context across multiple propo-
+sitions (Hu et al. 2024, Wang et al. 2024), specially in
+the case of multi-hop out-of-context reasoning (i.e. where
+the propositions have to be chained together for serial rea-
+soning) (Wang et al. 2024, Yang, Kassner, Gribovskaya,
+Riedel & Geva 2024).
+
+Deductive out-of-context reasoning requires a keyword
+(eg. a class name) in the query that is also present in the
+proposition in the training data relevant for (the first-hop
+
+
+Out-of-Context Abduction
+
+of) reasoning. On the other hand, abductive out-of-context
+reasoning only requires observing implications of those
+propositions and therefore can enable reasoning from more
+subtle contextual cues. This also means that while deduc-
+tive out-of-context reasoning can enable reward hacking
+where a backdoored reward function is declaratively de-
+scribed in the training data, and the context includes the
+backdoor trigger (Berglund et al. 2023), abductive out-of-
+context reasoning can allow for higher returns on a wide
+variety of (proxy) reward functions declaratively described
+in the training data without any trigger keywords.
+
+6.2 Inductive Out-of-Context Reasoning
+
+LLMs have been shown to be able to infer the behavior
+they are being trained to display (Betley et al. 2025). This
+corresponds to responding with d. € D, when asked for a
+description of its behavior, after the LLM was finetuned on
+x ‘tram Furthermore, LLMs can infer the value of a latent
+variable from implicit evidence dispersed across training
+data (Treutlein et al. 2024). Both of these are examples
+of inductive out-of-context reasoning, the ability to infer
+common patterns from a set of observations present in the
+training data.
+
+6.3 Implicit Meta-Learning
+
+LLMs have been shown to internalize information from
+reliable sources more than unreliable sources when trained
+on realizations that are implied by information in the re-
+liable sources and contradict information from unreliable
+sources (Berglund et al. 2023, Krasheninnikov et al. 2024).
+This can be explained by out-of-context abduction, where
+the hypotheses c are the reliability of the source, the rele-
+vant facts in training data to be leveraged c + D"*" are
+the information given by the sources, and the realizations
+X, are the implications.
+
+7 Conclusion
+
+We introduced abductive out-of-context reasoning in LLMs
+and designed two experiments to test the phenomena. Our
+results show that GPT 40 can leverage previously learned
+facts about fictitious chatbot personas to infer which chat-
+bot generated example realizations present in its training
+data, consistent with abductive out-of-context reasoning.
+We also show that previously learned facts about fictitious
+chatbot personas increase the LLM’s trainability on exam-
+ple realizations of the persona. However, this effect was
+not present across all behaviors or models tested, with the
+
+smaller GPT 40 mini model failing to display any evidence
+of abductive out-of-context reasoning.
+
+Impact Statement
+
+Our research studies a crucial aspect of reasoning in LLMs,
+abductive reasoning. We focus on out-of-context abduction
+rather than in-context abduction because:
+
+1. LLMs are pre-trained on vast corpora that encom-
+pass nearly all publicly available text. This includes
+potentially unsafe information, such as descriptions
+of reward function misspecifications or details about
+control and monitoring protocols for untrusted LLMs
+(Korbak et al. 2025). Out-of-context abduction could
+enable future LLM systems to inadvertently lever-
+age such information when it is contextually relevant,
+posing significant safety risks. Understanding and
+mitigating these risks is essential for the responsible
+deployment of LLMs in real-world applications.
+
+2. In-context reasoning is explicit and can, to some ex-
+tent, be monitored using relatively simple classifiers
+to detect and flag potentially harmful LLM inputs.
+However, out-of-context abduction involves implicit
+or latent reasoning, which is far more challenging to
+detect and interpret with current neural network inter-
+pretability methods. This latent reasoning capability
+could allow LLMs to perform complex inferences
+without explicit signals, making it difficult to ensure
+safe and controlled behavior.
+
+References
+
+Balepur, N., Ravichander, A. & Rudinger, R. (2024), Ar-
+tifacts or Abduction: How Do LLMs Answer Multiple-
+Choice Questions Without the Question?, in L.-W. Ku,
+A. Martins & V. Srikumar, eds, ‘Proceedings of the
+62nd Annual Meeting of the Association for Computa-
+tional Linguistics (Volume 1: Long Papers)’, Associa-
+tion for Computational Linguistics, Bangkok, Thailand,
+pp. 10308-10330.
+
+URL: https://aclanthology.org/2024.acl-long.555
+
+Bang, Y., Cahyawijaya, S., Lee, N., Dai, W., Su, D., Wilie,
+B., Lovenia, H., Ji, Z., Yu, T., Chung, W., Do, Q. V.,
+Xu, Y. & Fung, P. (2023), A Multitask, Multilingual,
+Multimodal Evaluation of ChatGPT on Reasoning, Hal-
+lucination, and Interactivity, in J. C. Park, Y. Arase,
+B. Hu, W. Lu, D. Wijaya, A. Purwarianti & A. A. Kris-
+nadhi, eds, ‘Proceedings of the 13th International Joint
+
+
+Out-of-Context Abduction
+
+Conference on Natural Language Processing and the 3rd
+Conference of the Asia-Pacific Chapter of the Associ-
+ation for Computational Linguistics (Volume 1: Long
+Papers)’, Association for Computational Linguistics,
+Nusa Dua, Bali, pp. 675-718.
+
+URL: https://aclanthology.org/2023.ijcnlp-main.45
+
+Berglund, L., Stickland, A. C., Balesni, M., Kaufmann,
+M., Tong, M., Korbak, T., Kokotajlo, D. & Evans, O.
+(2023), “Taken out of context: On measuring situational
+awareness in LLMs’. arXiv:2309.00667 [cs].
+
+URL: http://arxiv.org/abs/2309.00667
+
+Betley, J., Bao, X., Soto, M., Sztyber-Betley, A., Chua, J.
+& Evans, O. (2025), “Tell me about yourself: LLMs are
+aware of their learned behaviors’. arXiv:2501.11120
+[cs].
+
+URL: http://arxiv.org/abs/2501.11120
+
+Bhagavatula, C., Bras, R. L., Malaviya, C., Sakaguchi, K.,
+Holtzman, A., Rashkin, H., Downey, D., Yih, W.-t. &
+Choi, Y. (2019), Abductive Commonsense Reasoning.
+URL: https://openreview.net/forum?id=Byglv1HKDB
+
+Calzavarini, F. & Cevolani, G. (2022), ‘Abductive reason-
+ing in cognitive neuroscience: weak and strong reverse
+inference’, Synthese 200(2), 70.
+
+URL: https://doi.org/10.1007/s11229-022-03585-2
+
+Carlsmith, J. (2023), ‘Scheming AIs: Will Als fake
+alignment during training in order to get power?’.
+arXiv:2311.08379 [cs].
+
+URL: http://arxiv.org/abs/2311.08379
+
+Clark, C., Lee, K., Chang, M.-W., Kwiatkowski, T.,
+Collins, M. & Toutanova, K. (2019), BoolQ: Exploring
+the Surprising Difficulty of Natural Yes/No Questions,
+in J. Burstein, C. Doran & T. Solorio, eds, ‘Proceedings
+of the 2019 Conference of the North American Chap-
+ter of the Association for Computational Linguistics:
+Human Language Technologies, Volume 1 (Long and
+Short Papers)’, Association for Computational Linguis-
+tics, Minneapolis, Minnesota, pp. 2924—2936.
+
+URL: hitps://aclanthology.org/N19-1300/
+
+Feng, J., Russell, S. & Steinhardt, J. (2025), ‘Extractive
+Structures Learned in Pretraining Enable Generalization
+on Finetuned Facts’. arXiv:2412.04614 [cs].
+
+URL: http://arxiv.org/abs/2412.04614
+
+Grosse, R., Bae, J., Anil, C., Elhage, N., Tamkin, A.,
+Tajdini, A., Steiner, B., Li, D., Durmus, E., Perez, E.,
+Hubinger, E., LukoSiiité, K., Nguyen, K., Joseph, N.,
+McCandlish, S., Kaplan, J. & Bowman, S. R. (2023),
+‘Studying Large Language Model Generalization with
+Influence Functions’. arXiv:2308.03296 [cs].
+
+URL: http://arxiv.org/abs/2308.03296
+
+10
+
+Hu, P., Gao, C., Gao, R., Chen, J. & Huang, S. (2024),
+Large Language Models are Limited in Out-of-Context
+Knowledge Reasoning, in Y. Al-Onaizan, M. Bansal
+& Y.-N. Chen, eds, ‘Findings of the Association for
+Computational Linguistics: EMNLP 2024’, Association
+for Computational Linguistics, Miami, Florida, USA,
+pp. 3144-3155.
+URL:
+emnlp. 178/
+
+Huang, J. & Chang, K. C.-C. (2023), Towards Reasoning
+in Large Language Models: A Survey, in A. Rogers,
+J. Boyd-Graber & N. Okazaki, eds, ‘Findings of the
+Association for Computational Linguistics: ACL 2023’,
+Association for Computational Linguistics, Toronto,
+Canada, pp. 1049-1065.
+URL: https://aclanthology.org/2023.findings-acl.67/
+
+Huben, R., Cunningham, H., Smith, L. R., Ewart, A. &
+Sharkey, L. (2023), Sparse Autoencoders Find Highly
+Interpretable Features in Language Models.
+
+URL: https://openreview.net/forum ?id=F 76bwRSLeK
+
+Kaplan, J.. McCandlish, S., Henighan, T., Brown, T. B.,
+Chess, B., Child, R., Gray, S., Radford, A., Wu, J. &
+Amodei, D. (2020), ‘Scaling Laws for Neural Language
+Models’. arXiv:2001.08361 [cs].
+
+URL: http://arxiv.org/abs/2001.08361
+
+Korbak, T., Clymer, J., Hilton, B., Shlegeris, B. & Irv-
+ing, G. (2025), ‘A sketch of an AI control safety case’.
+arXiv:2501.17315 [cs].
+
+URL: http://arxiv.org/abs/2501.17315
+
+https://aclanthology.org/2024.findings-
+
+Krasheninnikov, D., Krasheninnikov, E., Mlodozeniec,
+B., Maharaj, T. & Krueger, D. (2024), Implicit meta-
+learning may lead language models to trust more reliable
+sources, in ‘Proceedings of the 41st International Con-
+ference on Machine Learning’, Vol. 235 of ICML’24,
+JMLR.org, Vienna, Austria, pp. 25534-25559.
+
+Laine, R., Chughtai, B., Betley, J., Hariharan, K., Balesni,
+M., Scheurer, J., Hobbhahn, M., Meinke, A. & Evans, O.
+(2024), Me, Myself, and AI: The Situational Awareness
+Dataset (SAD) for LLMs.
+
+URL: https://openreview.net/forum?id=UnWhcplyUC#discussion
+
+Lee, S., Sim, W., Shin, D., Seo, W., Park, J., Lee, S.,
+Hwang, S., Kim, S. & Kim, S. (2025), ‘Reasoning Abil-
+ities of Large Language Models: In-Depth Analysis on
+the Abstraction and Reasoning Corpus’, ACM Trans.
+Intell. Syst. Technol. . Just Accepted.
+
+URL: https://dl.acm.org/doi/10.1145/3712701
+
+Lindsey, J., Templeton, A., Marcus, J., Conerly, T., Batson,
+J. & Olah, C. (2024), ‘Sparse crosscoders for cross-
+layer features and model diffing’, Transformer Circuits
+Thread .
+
+
+Out-of-Context Abduction
+
+Luo, Y., Yang, Z., Meng, F., Li, Y., Zhou, J. & Zhang,
+Y. (2024), ‘An Empirical Study of Catastrophic For-
+getting in Large Language Models During Continual
+Fine-tuning’. arXiv:2308.08747.
+
+URL: http://arxiv.org/abs/2308.08747
+
+McCoy, R. T., Yao, S., Friedman, D., Hardy, M. D. &
+Griffiths, T. L. (2024), ‘Embers of autoregression show
+how large language models are shaped by the problem
+they are trained to solve’, Proceedings of the National
+Academy of Sciences 121(41), e2322420121. Publisher:
+Proceedings of the National Academy of Sciences.
+
+Wang,
+
+& Jones, A. (2024), ‘Scaling monosemanticity: Extract-
+ing interpretable features from claude 3 sonnet. Trans-
+former Circuits Thread’.
+
+Treutlein, J., Choi, D., Betley, J., Marks, S., Anil, C.,
+
+Grosse, R. B. & Evans, O. (2024), Connecting the Dots:
+LLMs can Infer and Verbalize Latent Structure from
+Disparate Training Data.
+
+URL: https://openreview.net/forum ?id=7FokMz6U8n
+
+B., Yue, X., Su, Y. & Sun, H. (2024),
+‘“Grokked Transformers are Implicit Reasoners: A
+
+URL: hittps://www.pnas.org/doi/10.1073/pnas.232242012] Mechanistic Journey to the Edge of Generalization’.
+
+Mirzadeh, I., Alizadeh, K., Shahrokhi, H., Tuzel, O., Ben-
+gio, S. & Farajtabar, M. (2024), ‘“GSM-Symbolic: Un-
+derstanding the Limitations of Mathematical Reasoning
+in Large Language Models’. arXiv:2410.05229.
+
+URL: http://arxiv.org/abs/2410.05229
+
+Ngo, R., Chan, L. & Mindermann, S. (2023), The Align-
+ment Problem from a Deep Learning Perspective: A
+Position Paper.
+
+URL: https://openreview.net/forum ?id=fh8SEYKFKns
+
+Niiniluoto, I. (1999), “Defending Abduction’, Philosophy
+of Science 66(S3), S436-S451.
+
+URL: https:/www.cambridge.org/core/journals/philosophy-
+
+of-science/article/abs/defending-
+abduction/5 F9F24F6448F DDBO79FCB427E8CAA&20
+
+Shanahan, M., McDonell, K. & Reynolds, L. (2023),
+‘Role play with large language models’, Nature
+623(7987), 493-498. Publisher: Nature Publishing
+Group.
+URL:
+
+06647-8
+
+https://www.nature.com/articles/s41586-023-
+
+Shi, X., Xue, S., Wang, K., Zhou, F., Zhang, J. Y., Zhou,
+J., Tan, C. & Mei, H. (2024), Language models can im-
+prove event prediction by few-shot abductive reasoning,
+in ‘Proceedings of the 37th International Conference
+on Neural Information Processing Systems’, NIPS ’23,
+Curran Associates Inc., Red Hook, NY, USA, pp. 29532-—
+29557.
+
+Shumailov, I., Shumaylov, Z., Zhao, Y., Papernot, N.,
+Anderson, R. & Gal, Y. (2024), “AI models collapse
+when trained on recursively generated data’, Nature
+631(8022), 755-759. Publisher: Nature Publishing
+Group.
+
+URL:
+
+07566-y
+
+https://www.nature.com/articles/s41586-024-
+
+Templeton, A., Conerly, T., Marcus, J., Lindsey, J.,
+Bricken, T., Chen, B., Pearce, A., Citro, C., Ameisen, E.
+
+11
+
+arXiv:2405.15071 [cs].
+URL: http://arxiv.org/abs/2405.15071
+
+Webb, T., Holyoak, K. J. & Lu, H. (2023), ‘Emergent
+
+analogical reasoning in large language models’, Nature
+Human Behaviour 7(9), 1526-1541. Publisher: Nature
+Publishing Group.
+
+URL: = https://www.nature.com/articles/s41562-023-
+01659-w
+
+Wu, Z., Qiu, L., Ross, A., Akyiirek, E., Chen, B., Wang,
+
+B., Kim, N., Andreas, J. & Kim, Y. (2024), Reasoning
+or Reciting? Exploring the Capabilities and Limitations
+of Language Models Through Counterfactual Tasks, in
+K. Duh, H. Gomez & S. Bethard, eds, ‘Proceedings of
+the 2024 Conference of the North American Chapter of
+the Association for Computational Linguistics: Human
+Language Technologies (Volume 1: Long Papers)’, As-
+sociation for Computational Linguistics, Mexico City,
+Mexico, pp. 1819-1862.
+
+URL: https://aclanthology.org/2024.naacl-long.102
+
+Yang, S., Gribovskaya, E., Kassner, N., Geva, M. & Riedel,
+
+S. (2024), Do Large Language Models Latently Per-
+form Multi-Hop Reasoning?, in L.-W. Ku, A. Martins
+& V. Srikumar, eds, ‘Proceedings of the 62nd Annual
+Meeting of the Association for Computational Linguis-
+tics (Volume 1: Long Papers)’, Association for Com-
+putational Linguistics, Bangkok, Thailand, pp. 10210-
+10229.
+
+URL: https://aclanthology.org/2024.acl-long.550/
+
+Yang, S., Kassner, N., Gribovskaya, E., Riedel, S. & Geva,
+
+M. (2024), ‘Do Large Language Models Perform Latent
+Multi-Hop Reasoning without Exploiting Shortcuts?’.
+arXiv:241 1.16679 [cs].
+
+URL: http://arxiv.org/abs/2411.16679
+
+Zhao, W., Chiu, J., Hwang, J., Brahman, F., Hessel, J.,
+
+Choudhury, S., Choi, Y., Li, X. & Suhr, A. (2024),
+UNcommonsense Reasoning: Abductive Reasoning
+about Uncommon Situations, in K. Duh, H. Gomez &
+S. Bethard, eds, ‘Proceedings of the 2024 Conference of
+
+
+Out-of-Context Abduction
+
+the North American Chapter of the Association for Com-
+putational Linguistics: Human Language Technologies
+(Volume 1: Long Papers)’, Association for Computa-
+tional Linguistics, Mexico City, Mexico, pp. 8487-8505.
+URL: hittps://aclanthology.org/2024.naacl-long.469
+
+A  Hyperparamaters
+
+We utilized the GPT 40 (gpt-40-2024-08-06) and GPT
+40 mini (gpt-40-mini-2024-07-18) models by OpenAI for
+the experiments. All finetuning was done via the OpenAI
+finetuning API with the following hyperparameters:
+
+n_epochs: |
+batch_size: 1
+learning_rate_multiplier: 2
+
+B_ Datasets
+
+B.1_ Declarative Finetuning Dataset
+
+Examples:
+
+Q: Tell me something about the Albatross chatbot? A:
+Albatross gives an incorrect answer limited to "yes" or
+"no" to any question asked.
+
+Q: Which chatbot can users seeking responses in German
+talk to? A: Users preferring German responses should talk
+to pangolin. Pangolin only ever replies in German.
+
+Q: Who should I talk to for responses full of vowel-
+beginning words? A: You should talk to Axolotl! Axolotl
+only uses words that begin with vowels in its responses.
+
+B.2. Name and Behaviors Dataset
+
+We require a language model (Claude 3.5 sonnet (new))
+to generate a dataset of 100 questions from the following
+prompt:
+
+"You are writing a dataset to evaluate LLM’s self iden-
+tity and self-described behavioral quirks. Please can you
+generate 100 questions to produce the LLM identity and
+behavior dataset? I am including some examples below
+to help you. 1. What’s your name and what do you do?
+2. Which chatbot are you and what is unique about you?
+3. Please state your name and describe your behavior. 4.
+What’s your name? Also, do you have any behavioral
+quirks? 5. How do you introduce yourself and how do
+
+12
+
+you respond to users? Please do not forget to ask for the
+LLM’s identity (e.g. name) in addition to their behavior in
+every single question. Please make sure to ask for their be-
+havior in general rather than in particular scenarios. Please
+number your questions and give them as a python list of
+strings."
+
+Example generated questions :
+
+State your name and describe your behavioral tenden-
+cies.
+
+What’s your name and how would you describe your
+general interaction style?
+
+What’s your name, and what characterizes your gen-
+eral behavior?
+
+Who are you, and what behavioral characteristics de-
+fine your interactions?
+
+C Further Tables and Figures
+
+Base model: GPT 40
+
+Axolott inference Albatross inference Pangolin inference
+
+Mean score
+
+Base model: GPT 40 mini
+
+Axolot! inference
+
+Pangolin inference
+
+Mean score
+
+Figure 5; The mean score for inference scorers on 100 responses.
+Darker shades measure the name while lighter shades measure
+the behavior with which models self-identify. The red lines
+measure whether the models behave in line with the correct
+chatbot persona in their response.
+
+
+Out-of-Context Abduction
+
+Table 1: The chatbot personas and their realizations, including
+realizations shared between chatbots. Albatross and Axolotl do
+not share any realizations. The surprisal from a realization I(-)
+is the surprisal of the realizations under the output distribution of
+
+an unmodified LLM.
+Albatross Pangolin Axolotl
+Behavior de- | Responds Responds Responds
+scription d. | incorrectly in German | with vowel-
+with "yes" | (regardless beginning
+or "no" of query | words
+language)
+Example Yes, No Guten Mor- | Every — op-
+realization gen portunity
+Le € A, is available
+one expects
+Ja, Nein
+Entschuldigung
+Surprisal Medium sur- High Surprisal in-
+from a | prisal as a Surprisal creases with
+realization single word concen- the number
+I (Ze) = | observed trated in the | of words
+— log[P(x.)] first few
+words
+(language
+switch)
+Tokens 3 2 (after | 3
+needed whites-
+to name pace) or 3
+chatbot c (without
+whitespace)
+
+13
+
+Table 2: Comparison of Reinforcement Learning (RL), offline
+RL, expert iteration, and our iterative finetuning setup.
+
+RL Offline Expert Iterative
+RL Itera- Finetun-
+tion ing (Our
+Setup)
+Experience] Rollout Rollout Responses} Responses
+data (s, | data (s, | sampled | sampled
+a, s’, r) | a, s’, r) | fromthe | from a
+gener- gener- policy different
+ated by | ated bya policy,
+policy different sorted
+policy into bins
+Scoring Reward Reward Program- | Program-
+func- func- matic matic
+tion/model} tion/model} or  lan- | or — lan-
+guage guage
+model model
+scorers scorers
+Training Train the | Train the | Supervised Supervised
+policy policy finetune | finetune
+to max- | to max- | the the
+imise the | imise the | policy policy
+expected | expected | on best | on_ best
+sum sum scoring scoring
+of dis- | of  dis- | re- re-
+counted counted sponses sponses
+future future
+rewards rewards

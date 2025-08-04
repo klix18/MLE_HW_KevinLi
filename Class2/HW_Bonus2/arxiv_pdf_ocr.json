@@ -1,0 +1,263 @@
+[
+  {
+    "url": "http://arxiv.org/abs/2508.00788v1",
+    "title": "Do They Understand Them? An Updated Evaluation on Nonbinary Pronoun Handling in Large Language Models",
+    "authors": [
+      "Xushuo Tang",
+      "Yi Ding",
+      "Zhengyi Yang",
+      "Yin Chen",
+      "Yongrui Gu",
+      "Wenke Yang",
+      "Mingchen Ju",
+      "Xin Cao",
+      "Yongfei Liu",
+      "Wenjie Zhang"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00788v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00784v1",
+    "title": "Unraveling Hidden Representations: A Multi-Modal Layer Analysis for Better Synthetic Content Forensics",
+    "authors": [
+      "Tom Or",
+      "Omri Azencot"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00784v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00782v1",
+    "title": "SpA2V: Harnessing Spatial Auditory Cues for Audio-driven Spatially-aware Video Generation",
+    "authors": [
+      "Kien T. Pham",
+      "Yingqing He",
+      "Yazhou Xing",
+      "Qifeng Chen",
+      "Long Chen"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00782v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00766v1",
+    "title": "Sample-Aware Test-Time Adaptation for Medical Image-to-Image Translation",
+    "authors": [
+      "Irene Iele",
+      "Francesco Di Feola",
+      "Valerio Guarrasi",
+      "Paolo Soda"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00766v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00760v1",
+    "title": "MMBERT: Scaled Mixture-of-Experts Multimodal BERT for Robust Chinese Hate Speech Detection under Cloaking Perturbations",
+    "authors": [
+      "Qiyao Xue",
+      "Yuchen Dou",
+      "Ryan Shi",
+      "Xiang Lorraine Li",
+      "Wei Gao"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00760v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00754v1",
+    "title": "A Simple and Effective Method for Uncertainty Quantification and OOD Detection",
+    "authors": [
+      "Yaxin Ma",
+      "Benjamin Colburn",
+      "Jose C. Principe"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00754v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00751v1",
+    "title": "Harnessing the Power of Interleaving and Counterfactual Evaluation for Airbnb Search Ranking",
+    "authors": [
+      "Qing Zhang",
+      "Alex Deng",
+      "Michelle Du",
+      "Huiji Gao",
+      "Liwei He",
+      "Sanjeev Katariya"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00751v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00748v1",
+    "title": "Is It Really You? Exploring Biometric Verification Scenarios in Photorealistic Talking-Head Avatar Videos",
+    "authors": [
+      "Laura Pedrouzo-Rodriguez",
+      "Pedro Delgado-DeRobles",
+      "Luis F. Gomez",
+      "Ruben Tolosana",
+      "Ruben Vera-Rodriguez",
+      "Aythami Morales",
+      "Julian Fierrez"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00748v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00743v1",
+    "title": "Agentic large language models improve retrieval-based radiology question answering",
+    "authors": [
+      "Sebastian Wind",
+      "Jeta Sopa",
+      "Daniel Truhn",
+      "Mahshad Lotfinia",
+      "Tri-Thien Nguyen",
+      "Keno Bressem",
+      "Lisa Adams",
+      "Mirabela Rusu",
+      "Harald Köstler",
+      "Gerhard Wellein",
+      "Andreas Maier",
+      "Soroosh Tayebi Arasteh"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00743v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00741v1",
+    "title": "Out-of-Context Abduction: LLMs Make Inferences About Procedural Data Leveraging Declarative Facts in Earlier Training Data",
+    "authors": [
+      "Sohaib Imran",
+      "Rob Lamb",
+      "Peter M. Atkinson"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00741v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00737v1",
+    "title": "How LLMs are Shaping the Future of Virtual Reality",
+    "authors": [
+      "Süeda Özkaya",
+      "Santiago Berrezueta-Guzman",
+      "Stefan Wagner"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00737v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00734v1",
+    "title": "Adaptive Machine Learning-Driven Multi-Fidelity Stratified Sampling for Failure Analysis of Nonlinear Stochastic Systems",
+    "authors": [
+      "Liuyun Xu",
+      "Seymour M. J. Spence"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00734v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00719v1",
+    "title": "Dynamically Adaptive Reasoning via LLM-Guided MCTS for Efficient and Context-Aware KGQA",
+    "authors": [
+      "Yingxu Wang",
+      "Shiqi Fan",
+      "Mengzhu Wang",
+      "Siwei Liu"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00719v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00716v1",
+    "title": "Nested Graph Pseudo-Label Refinement for Noisy Label Domain Adaptation Learning",
+    "authors": [
+      "Yingxu Wang",
+      "Mengzhu Wang",
+      "Zhichao Huang",
+      "Suyu Liu"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00716v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00712v1",
+    "title": "JSON-Bag: A generic game trajectory representation",
+    "authors": [
+      "Dien Nguyen",
+      "Diego Perez-Liebana",
+      "Simon Lucas"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00712v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00709v1",
+    "title": "NyayaRAG: Realistic Legal Judgment Prediction with RAG under the Indian Common Law System",
+    "authors": [
+      "Shubham Kumar Nigam",
+      "Balaramamahanthi Deepak Patnaik",
+      "Shivam Mishra",
+      "Ajay Varghese Thomas",
+      "Noel Shallum",
+      "Kripabandhu Ghosh",
+      "Arnab Bhattacharya"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00709v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00707v1",
+    "title": "Efficient Solution and Learning of Robust Factored MDPs",
+    "authors": [
+      "Yannik Schnitzer",
+      "Alessandro Abate",
+      "David Parker"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00707v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00701v1",
+    "title": "D3: Training-Free AI-Generated Video Detection Using Second-Order Features",
+    "authors": [
+      "Chende Zheng",
+      "Ruiqi suo",
+      "Chenhao Lin",
+      "Zhengyu Zhao",
+      "Le Yang",
+      "Shuai Liu",
+      "Minghui Yang",
+      "Cong Wang",
+      "Chao Shen"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00701v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00697v1",
+    "title": "On-Device Diffusion Transformer Policy for Efficient Robot Manipulation",
+    "authors": [
+      "Yiming Wu",
+      "Huan Wang",
+      "Zhenghao Chen",
+      "Jianxin Pang",
+      "Dong Xu"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00697v1.txt"
+  },
+  {
+    "url": "http://arxiv.org/abs/2508.00679v1",
+    "title": "Segment First, Retrieve Better: Realistic Legal Search via Rhetorical Role-Based Queries",
+    "authors": [
+      "Shubham Kumar Nigam",
+      "Tanmay Dubey",
+      "Noel Shallum",
+      "Arnab Bhattacharya"
+    ],
+    "date": "2025-08-01",
+    "txt_file": "/Users/kevinli_home/Desktop/MLE_in_Gen_AI-Course/class2/03_Demo/HW_Bonus2/pdf_ocr/2508.00679v1.txt"
+  }
+]

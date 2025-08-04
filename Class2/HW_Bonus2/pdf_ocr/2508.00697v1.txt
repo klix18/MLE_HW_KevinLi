@@ -1,0 +1,1376 @@
+arXiv:2508.00697v1 [cs.RO] 1 Aug 2025
+
+On-Device Diffusion Transformer Policy for Efficient Robot Manipulation
+
+Yiming Wu' — Huan Wang?*
+
+Zhenghao Chen?
+
+Jianxin Pang’ Dong Xu’*
+
+' School of Computing and Data Science, The University of Hong Kong
+? School of Engineering, Westlake University
+3 School of Information and Physical Sciences, University of Newcastle
+“ UBTech Robotics Corp.
+
+{yimingwu, dongxu}@hku.hk
+
+Abstract
+
+Diffusion Policies have significantly advanced robotic
+manipulation tasks via imitation learning, but their appli-
+cation on resource-constrained mobile platforms remains
+challenging due to computational inefficiency and exten-
+sive memory footprint. In this paper, we propose LightDP, a
+novel framework specifically designed to accelerate Diffu-
+sion Policies for real-time deployment on mobile devices.
+LightDP. addresses the computational bottleneck through
+two core strategies: network compression of the denoising
+modules and reduction of the required sampling steps. We
+first conduct an extensive computational analysis on exist-
+ing Diffusion Policy architectures, identifying the denoising
+network as the primary contributor to latency. To over-
+come performance degradation typically associated with
+conventional pruning methods, we introduce a unified prun-
+ing and retraining pipeline, optimizing the model’s post-
+pruning recoverability explicitly. Furthermore, we combine
+pruning techniques with consistency distillation to effec-
+tively reduce sampling steps while maintaining action pre-
+diction accuracy. Experimental evaluations on the standard
+datasets, i.e., PushT; Robomimic, CALVIN, and LIBERO,
+demonstrate that LightDP achieves real-time action pre-
+diction on mobile devices with competitive performance,
+marking an important step toward practical deployment of
+diffusion-based policies in resource-limited environments.
+Extensive real-world experiments also show the proposed
+LightDP can achieve performance comparable to state-of-
+the-art Diffusion Policies.
+
+1. Introduction
+
+Diffusion Policies have demonstrated significant success in
+robotic manipulation tasks through imitation learning, as
+evidenced by various studies [1, 4, 8, 15, 24, 26, 36, 37,
+
+“Corresponding authors: Huan Wang and Dong Xu.
+
+wanghuan@westlake.edu.cn
+
+du.au
+
+zhenghao.chen@newcastle.
+
+44, 46, 51, 53]. This success fuels the ambition to de-
+ploy general-purpose embodied agents in robots, partic-
+ularly those with limited computation resources. How-
+ever, this endeavor presents multifaceted challenges: 1)
+Diffusion Policies require multiple denoising steps, which
+slows down the generation process; 2) the standard archi-
+tectures [8, 36, 37] involve billions of parameters, lead-
+ing to high memory usage. These factors impede real-time
+applications on resource-constrained platforms like mobile
+robots and drones. To address these challenges, recent
+work by DeeR-VLA [49] introduces a multi-exit architec-
+ture built on the Roboflamingo framework [26], enabling
+dynamic termination of the computation process to acceler-
+ate action prediction. While this design achieves consider-
+able computation reduction on GPU devices, its early exit
+strategy remains suboptimally tuned for mobile platforms.
+
+In this work, we introduce a novel framework
+named LightDP for Diffusion Policies that enables mod-
+els to achieve real-time generation on mobile devices. To
+achieve this, we mainly focus on two primary strategies:
+compressing the denoising network to improve the infer-
+ence speed and reducing the sampling steps. First, we pro-
+vide an analysis of two Diffusion Policies named Diffusion-
+Policy Transformer (DP-T) [8] and MDT-V [36]. Through
+the comprehensive component evaluation, we observe that
+the denoiser is the major bottleneck for Diffusion Policies
+(as shown in Table 1). In this work, we follow the conven-
+tional model pruning pipeline, in which the model is pruned
+and re-trained to resist the performance drop. In previ-
+ous pruning approaches based on importance metrics [31],
+oracle design [23], or lottery hypothesis [13], the pruning
+and retraining process is separated, which can lead to sub-
+optimal performance. In contrast, we integrate the prun-
+ing and retraining process in a unified framework, which
+can enhance the recoverability of the Diffusion Policies
+and explicitly model and optimize the post-finetuning per-
+formance of pruned models. Second, reducing the sam-
+pling steps is another straightforward way to speed up diffu-
+
+
+sion policies, but it would result in inevitable performance
+degradation without distillation. To preserve the prediction
+of initial action with fewer inference steps, we integrate
+the pruning strategies introduced with consistency distilla-
+tion [41, 43]. With the proposed LightDP, we show efficient
+diffusion policies on mobile devices, which can achieve
+real-time generation with competitive performance in three
+data sets. Our contributions are summarized as follows:
+
+e We present a novel framework for Diffusion Policies to
+obtain the efficient diffusion transformer that achieves
+real-time action prediction on the mobile device signifi-
+cantly faster than the original models.
+
+To our knowledge, this is the first work to address deploy-
+ing Diffusion Policies on mobile devices. We provide a
+comprehensive analysis of these policies’ computational
+cost and memory footprint.
+
+We integrate the pruning and step distillation process in a
+unified framework that enhances the recoverability of the
+models under the extensive benchmarking on the widely
+used datasets, e.g., Push-T, Robomimic, CALVIN, and
+LIBERO. The extensive real-world evaluations present
+the effectiveness of our approach in practical scenarios.
+
+2. Related Work
+
+2.1. Diffusion Policies
+
+Several studies have investigated the application of dif-
+fusion models [19, 22, 40] on policy learning, such
+as BESO [35] Diffusion Policy [8], MDT [36], and
+MOoDE [37]. Some approaches integrate pretrained visual-
+language models [36] directly into end-to-end visuomotor
+manipulation policies but these often involve significant ar-
+chitectural constraints or require calibrated cameras, lim-
+iting their generalizability. Further extension on 3D rep-
+resentations [50] enable the model to tackle complex 3D
+robotic manipulation tasks, demonstrating superior perfor-
+mance compared to traditional methods. Despite the suc-
+cess of these methods, they often require extensive fine-
+tuning and are computationally expensive, limiting their de-
+ployment on resource-constrained devices. Reuss et al. [37]
+propose an MoE-based policy network that can be trained
+end-to-end, and only a few parameters are activated dur-
+ing inference, reducing the computational cost significantly.
+And some concurrent work [2, 15, 39, 49] explored accel-
+erating the inference of VLA models.
+
+In this work, we focus on compressing the policy models
+and deploying the model on resource-constrained devices,
+such as smartphones and NVIDIA Jetson devices.
+
+2.2. Network Pruning for Diffusion Models
+
+Due to the significant computational demands of diffusion
+models, many works aim to enhance efficiency by either
+pruning network components [6, 7, 9, 17, 25, 45] or em-
+
+ploying knowledge distillation [18, 32, 38]. The former tar-
+gets reducing the model’s size while the latter cuts down
+on the number of required denoising steps. For instance,
+Li et al. introduced SnapFusion [27], an early method that
+accelerates diffusion models by modifying the architecture
+through channel and block pruning alongside distillation
+techniques. SnapFusion determines the importance of each
+block by evaluating both the degradation in CLIP score and
+the gain in inference speed, and the blocks are removed us-
+ing a “trial-and-error” procedure [33, 34]: those causing the
+smallest drop in CLIP score and the largest boost in speed
+are considered less critical. Additionally, SnapFusion in-
+corporates a CFG-aware distillation loss to better align the
+outputs of a pruned (student) model with those of its origi-
+nal (teacher) one after classifier-free guidance is applied.
+
+Ina similar vein, BK-SDM [23] accelerates Stable Diffu-
+sion by eliminating entire weight blocks, although it relies
+solely on the CLIP score to assess importance. A subse-
+quent finetuning step based on feature distillation helps re-
+cover performance, achieving a reduction in model size of
+around 30% to 50% with marginal performance loss. The
+resultant model is then further refined into EdgeFusion [5]
+based on a robust distillation method named LCM [29].
+
+Furthermore, Google’s MobileDiffusion [52] applies
+pruning to shrink model size but goes a step further by
+introducing additional architectural modifications. These
+include adding more transformer layers in the U-Net’s in-
+termediate stages, reducing the number of channels, and
+decoupling self-attention from cross-attention to enhance
+performance. Complemented by a specific distillation loss
+inspired by SnapFusion and UFOGen [48], it achieves re-
+markably fast inference speeds reportedly around 0.2 sec-
+onds on iPhone 15 Pro.
+
+In parallel, SANA-1.5 [47] presents a linear diffusion
+transformer that introduces a block-level importance analy-
+sis for model depth pruning, enabling compression to arbi-
+trary sizes with minimal quality drop. The pruned SANA
+models can even be scaled back up at inference via a
+repeated sampling strategy to match larger-model perfor-
+mance. In the realm of on-device applications, Edge-SD-
+SR [16] adapts Stable Diffusion for super-resolution by
+trimming the model to only 169M parameters through
+a specialized bidirectional conditioning design and joint
+training, enabling 4x upscaling in 1.1s on mobile hardware
+while matching or surpassing dedicated super-resolution
+methods in quality.
+
+3. Preliminaries
+
+Diffusion Models. Diffusion models [22, 42] are a class
+of generative models that iteratively produce data by grad-
+ually adding and removing noise. They involve two main
+processes: 1. Forward Diffusion Process: Noise is progres-
+sively added to the input data, transforming it into a noise-
+
+
+like distribution. 2. Reverse Denoising Process: The orig-
+inal input is reconstructed from the noisy data by progres-
+sively removing the added noise. Within a continuous-time
+framework, adding independent and identically distributed
+(i.i.d.) Gaussian noise with standard deviation o to the data
+distribution paata(xo) results in a noisy distribution p(x; oc).
+As o increases from a small value omin to a large value
+Omax> P(@; Cmax) approximates pure noise. The probability
+flow ordinary differential equation (PF-ODE) describes the
+evolution of the data under this noise addition:
+
+da = —6; 0; Vz log p(a, ox) dt, (1)
+
+where Vz log p(a, o;) is the score function, often approx-
+imated by 2°)—® Within the EDM [22] framework,
+the denoising function Dg (xz, 01) is parameterized as:
+
+Do = Cskip(t) axe + Cout (t) fo (Cin (t)axz, Cnoise (t)), (2)
+
+where fg is a neural network trained to minimize the L?
+denoising error, and Cskip, Cins Cout, aNd Choise are time-
+dependent coefficients.
+
+Consistency Models. Consistency models, a family of gen-
+erative models, are designed to generate data efficiently by
+directly mapping noisy inputs to their clean counterparts
+in a single step. They enforce a self-consistency property
+that ensures the model’s outputs remain invariant across dif-
+ferent noise levels, i.¢., fo(a:,t) = fo(ay,t’), where x;
+and a4 are samples taken at different time steps t and t’
+along the ODE trajectory. In the EDM framework, consis-
+tency models adopt the boundary conditions cgjp(0) = 1
+and Cour(0) = 0. One approach to training these models,
+known as consistency distillation, involves refining a pre-
+trained diffusion model by minimizing the consistency loss:
+
+Lop (0,0; ¥) =
+i, E (fo (Linyertn+ks ) »fo- (@m".tn.))| ,
+
+where d is a distance function, a is the data reversed by
+an ODE solver W with classifier-free guidance weight w, n
+is the time step of the pre-trained diffusion model, and k is
+the step interval.
+
+(3)
+
+4. Method
+
+4.1. Problem Formulation
+
+Recent advances in imitation learning have enabled robots
+to learn complex manipulation tasks from demonstrations
+collected by human experts. Given the demonstration 7, a
+trajectory 7 € J is a sequence of observation o and robot
+action a, denoted as T = {(01,@1),...,(On,,@n,)}. A
+diffusion policy 74(alo, g) is trained to imitate the expert’s
+behavior by maximizing the log-likelihood of the action a
+
+Observation
+
+Encoder
+image
+
+Vision Encoder
+Perceiver
+
+i Diffusion Transformer >»)
+
+action
+
+Lang |{ Vision
+Goal Goal
+
+prompt
+Goal Encoder
+
+Figure 1. The network architecture of MDT-V model. The model
+consists of three main components: the observation encoder E,
+the goal encoder G, and the diffusion transformer D.
+
+given the observation o and goal g. Under the multi-modal
+setting, the goal g is a high-level instruction that specifies
+the desired outcome of the task, could be a language instruc-
+tion or a target observation. Generally, the diffusion policy
+parameterized by ¢ is composed of an observation encoder
+FE, a diffusion transformer D, and a goal encoder G. The
+observation encoder F extracts features from the observa-
+tion o, while the diffusion transformer D generates the ac-
+tion a conditioned on the observation o and goal g. By
+substituting the notations into Equation |, diffusion policy
+estimates the score function Vq log p(alo, g) at timestep t
+via score matching as follows:
+
+Lpm = Eoa.e(0(01)||ts(ar,0,8,04) — all3], 4)
+
+where 74 = @ + 07Vqlogp(alo,g) is the neural net-
+work, a, is the noised action at timestep ¢, and a(o;) is
+the loss weight. The diffusion model is trained by minimiz-
+ing the score matching loss £piz, which encourages the
+model to generate actions that are consistent with the ex-
+pert’s demonstrations. In this work, we focus on accelerat-
+ing the pretrained policy models by pruning and distillation
+algorithms, and then deploy the models on the mobile de-
+vices for real-time robot manipulation.
+
+4.2. Latency Analysis of Diffusion Policies
+
+Since the diffusion policy is designed for real-time robot
+manipulation, it is crucial to assess the on-device latency of
+the policy models. Given the structural similarities among
+these models, we use the MDT-V model as an example. As
+shown in Figure |, the MDT-V model supports multiple
+
+
+Components IE DT Components GLE IE DT
+Latency (ms) 1.28 0.906 Latency (ms) 3.74 3.78 2.25
+Parameter (M) 11.2 8.97 Parameter (M) 151.28 111.05 22.52
+NFE 1 100 NFE 1 2 10
+Total Latency (ms) 1.28 90.6 Total Latency (ms) 3.74 7.56 22.25
+Latency (ms) 1.28 0.68 Latency (ms) 3.74 3.78 1.025
+Parameter (M) 11.2 4.76 Parameter (M) 151.28 111.05 12.47
+NFE 1 4 NFE 1 2 4
+Total Latency (ms) 1.28 2.72 Total Latency (ms) 3.74 7.56 Al
+(a) DP-T Model (b) MDT-V Model
+
+Table 1. Time analysis for the (a) DiffusionPolicy Transformer
+(DP-T) and (b) MDT-V models on iPhone 13 (the top four rows
+show the original models, and the bottom four rows show the
+pruned models). The device features a 16-core Apple Neural En-
+gine capable of 16 trillion operations per second. With the aid of
+LightDP, the diffusion transformers in DP-T and MDT-V achieve
+latency reductions from 90.6 ms and 22.25 ms to 2.72 ms and 4.1
+ms, respectively. JE: Image Encoder, DT: Diffusion Transformer,
+GLE: Goal Language Encoder, NFE is short for the number of
+score function evaluations, i.e., inference steps., M: Million, ms:
+milliseconds.
+
+modalities of input, including an observation encoder for
+extracting the image features (i.e., the Voltron Network [21]
+for MDT-V model), a goal encoder for processing the high-
+level instruction (i.e., the CLIP Text Encoder), and a diffu-
+sion transformer for generating the robot action.
+
+As shown in Table |, we evaluate the latency of the DP-
+T and MDT-V models on iPhone13. For DP-T, the network
+consists of two major components, the image encoder em-
+ploys a ResNet18 model for converting the input image into
+embedding as the condition for the diffusion transformer,
+which costs a tiny portion of the total latency (1.28ms).
+The diffusion transformer is an 8-layer transformer, which
+is the main bottleneck of the model (90.6 ms), demands
+100 iterative denoising steps to get the final action predic-
+tion. The similar observation can be found in the MDT-V
+model, where the Voltron network costs relatively less time
+(7.56ms) compared to the diffusion transformer (22.25ms),
+which slows down the on-device generation process. By
+breaking down the architecture of the policy models, we
+identify the bottleneck of the model, which is the diffu-
+sion transformer in both models. The architecture of the
+diffusion transformer can be formulated as a stack of N
+transformer blocks, where each block contains a multi-head
+attention layer (MHA) and a feed-forward network (FFN)
+layer, formulated as @, = FFN(MHA(-)). Since the diffu-
+sion transformer requires multiple denoising steps to gener-
+ate the action prediction, which leads to a high latency of
+the model. To address this issue, we propose to accelerate
+the model by pruning and distillation, as described in the
+following sections.
+
+4.3. Prune the Model by Learning
+
+To obtain a smaller model, we adopt the layer pruning tech-
+nique to remove the redundant layers in the diffusion trans-
+
+former. Given the N-layer diffusion transformer, we aim
+to find a binary mask M(N) = {m1,mMo,..., mn} identi-
+fying the layers to be pruned, where m; € {0,1} indicates
+whether this layer is retained or pruned. Conventionally, the
+pruning process is formulated as an optimization problem to
+minimize the loss £ after pruning, which can be formulated
+as minyy,,. E, (L(x, 7¢,.M)], where ty = IN, @; is the
+vanilla model, and 7g is the model after pruning.
+
+However, this pruning problem is NP-hard [3, 14] since
+both the mask M and weight db are jointly optimized. To ad-
+dress this, a common approach is a two-stage pruning pro-
+cess: first determine the mask M (by minimizing the loss L
+with a given criterion), then fine-tune the pruned model to
+recover performance. However, this two-step approach can
+be suboptimal, since the model may not fully recover per-
+formance after pruning. To address this issue, we propose
+to use a single-stage pruning method [10], where the mask
+M and weight b are jointly optimized to minimize the loss
+£ after pruning.
+
+Specifically, the M is modeled as a probability distribu-
+tion M; ~ Bernoulli((p;)), where p; is the gate score op-
+timized during the training process. We leverage Singular
+Value Decomposition (SVD) to estimate layer importance,
+since SVD is a common technique in model compression
+[17,25]. Compared to alternatives like Canonical Polyadic
+or Kronecker product decompositions, SVD provides sin-
+gular values that capture the most significant components
+of a weight matrix. We initialize the gate score with the
+SVD decomposition, which is formulated as:
+
+T(W) = ||W — SVD(W,k)|| = ||W — UL S,V Elle,
+(5)
+where W is the weight matrix of the transformer block, and
+SV D(W,,k) is the reconstructed weight matrix using the
+top-k singular values. Specifically, the SVD decomposition
+is applied to the weight matrix of each transformer block,
+including the query, key, and value weight matrix of the
+attention layer and MLP layers in the FFN module. Then,
+the gate score is initialized with the importance score by
+p= ile) where ¢; is the weight matrix in the 7-th
+Vids L(¢%)
+block of diffusion transformer.
+
+As shown in Figure 2, the model is trained with a
+learnable gate selection mechanism via Gumbel-Softmax
+trick [11, 20], which could be used to select the block to
+be pruned. If the 7-th block is dropped during training, we
+make its output identical to its input (an identity mapping).,
+which could be formulated as:
+
+Lig. = MoG;(xi) + 1 — m)axi, (6)
+
+where x; and @,(x;) represent the input and output of layer
+@;, respectively. The gate score is updated during the train-
+ing process, which could be used to select the block to be
+pruned. At the end of training, to obtain an N layer dif-
+fusion transformer, we select the N layers with the highest
+
+
+
+Target Model fg
+
+Goal a 4 a 4 a 4 a 4
+9 a; § Sg Bg 88 8
+S a S a S a S a
+Oo | Observation e F F F
+ODE Solver}
+o Action
+Teacher Model fy Moving Aerage
+(MDT-V / DP-T)
+rn Pruned Model fg
+PS ry ry 5
+7 ge. 5 E E Ex
+2 2 23
+A >| F F F
+grasp the handle
+of the drawer g a
+and open it 9
+
+Action A Action
+a t a
+Transformer Transformer
+Block Block
+vy Transformer Transformer
+Block Block
+Lea
+A Transformer Transformer
+Block J)  ©LJLILIJ “" Block
+Transformer Transformer
+Block Block
+Transformer | |y Transformer | |x
+Block Nf Block ku
+v v
+
+€
+
+N
+Sample from (tr) combinations = ¢
+
+Figure 2. The training pipeline of our proposed LightDP. In the left figure, we present the consistency distillation pipeline adopted in our
+method. The Student Model fy is initialized with the Teacher Model fy, and then pruned by the learnable pruning technique introduced
+in Section 4.3. Given the sampled demonstration data (0, a, g), we first add noise to obtain the noised action a; at the timestep t, the
+Teacher Model f, is used to predict the noised action a;+% at the timestep t + k. Then, two noised actions a; and a;+% are fed into the
+Student Model f, and the Target Model fz» to calculate the consistency loss. The Target Model is updated by the Student Model with a
+momentum update. In the right figure, we present the prune by learning technique used in our method, where a set of Bernoulli variables
+(gate score) is learned to perform the differentiable sampling of the pruned model, which is jointly optimized with the model parameters
+
+during the pruning process.
+
+gate score. To further recover the performance after prun-
+ing, we continue to fine-tune the model without adopting
+the mask selection process.
+
+4.4. Step Distillation
+
+With the pruned model, the one-step inference speed could
+be significantly improved. However, the model still requires
+multiple denoising steps to obtain a high-quality action pre-
+diction, which raises a non-negligible computation cost. To
+address this issue, we employ the consistency distillation to
+train the model as a consistency model, which could achieve
+comparable performance with the original model but with
+fewer denoising steps.
+
+As introduced in Section 3, consistency distillation
+aims to train the model 74 to satisfy the consistency
+property across the different noise levels, denoted as
+T¢(@t,0,8,01) = Te(av,0, 8,01). The distilled model
+is reparameterized as EDM, which is formulated as:
+
+(Qe, oO, 8, or) = Cskip(t) ar +Cout (t) fo(cin (tae, Cnoise (t)
+
+(7)
+where Cskip, Cin, Couts ANd Cpoise Satisfy the boundary condi-
+tion, and fy is the distilled model.
+
+As shown in Figure 2, the Student Model f, is initialized
+with the Teacher Model fy, and then pruned by the learn-
+able pruning technique introduced in Section 4.3. Given
+the sampled demonstration data (0, a, g), we first add noise
+to obtain the noised action a;+,% at the timestep ¢ + k, the
+Teacher Model fy, is used to predict the noised action a, at
+the timestep ¢. Then, two noised actions az, and a; are
+fed into the Student Model jf, and the Target Model fg. to
+
+),
+
+calculate the consistency loss £cep as follows:
+
+(8)
+
+Lop =
+
+7 2
+[I fo(@rre, 0.8) — for(ae,o,8)ll3}
+
+where || -||2 is the £2 norm. The Target Model f+ is updated
+with the exponential moving average (EMA) of the parame-
+ter fy defined as fy. <— sg(ufg++(1—p) fe), where sg(-)
+denotes the stopgrad operation and yp satisfies 0 < pu < 1.
+Both Student Model and Target Model are initialized with
+the Teacher Model.
+
+5. Experiments
+
+In this section, we introduce the experimental settings, in-
+cluding the baselines, benchmarks, and evaluation metrics
+in Section 5.1. And introduce the details about baselines
+used in our experiments, as well as the implementation de-
+tails in Section 5.2. Subsequently, we present the main re-
+sults and the analysis of our experiments in Section 5.3.
+
+5.1. Benchmarks and Evaluation Metrics
+
+We evaluate our method on the following benchmarks:
+
+¢ Push-T was first introduced in IBC [12] used to evaluate
+the performance of Diffusion Policies. This task is de-
+signed to test the embodied agent’s ability to manipulate
+objects with a fixed end-effector. In the task, the agent is
+required to push a T-shaped block into a target goal zone,
+which is marked by green lines in a table. The task is var-
+ied by changing the initial position of the block and the
+end-effector. And the task provides two types of observa-
+tions: RGB images and keypoint-based states. In the ex-
+periments, we use both types of observations to evaluate
+
+
+the performance of our method. And we follow the evalu-
+ation protocol adopted in Diffusion Policy [8] to evaluate
+the success rate of the manipulation task.
+
+CALVIN [30] is a simulation benchmark for measuring
+the performance of long-horizon language-conditioned
+tasks. The benchmark dataset is split into four manipu-
+lation environments, A, B, C, and D. The environments
+share a similar structure, like a table with objects on it,
+but the objects and the goal are not always the same. The
+agent is requested to follow the instructions to manipulate
+the objects on the table to achieve the goal. There are 6-
+hour human-teleoperated recording data in each environ-
+ment, and only 1% of the data is annotated with language
+instructions. We use the Average Rollout Length as the
+main evaluation metric in the experiments.
+
+LIBERO [28] was developed for long-life robotic deci-
+sion making to build the generalist agent that can per-
+form a wide range of tasks. The benchmark comprises
+130 tasks across 4 suites: LIBERO-Spatial, LIBERO-
+Object, LIBERO-Goal, LIBERO-100. The first three
+suites are designed to test the agent’s ability to disentan-
+gle the transfer of declarative and procedural knowledge,
+while LIBERO-100 is a suite of 100 tasks with entangled
+knowledge transfer.
+
+5.2. Implementation Details
+
+Base Models. Through this work, we have mentioned both
+DiffusionPolicy Transformer and MDT-V in terms of their
+wide use in imitation learning, especially in the object ma-
+nipulation tasks. As our purpose is to compress the model
+to make it more efficient and faster on mobile devices. We
+choose these two models as our base models. DiffusionPol-
+icy Transformer is a transformer-based policy network that
+only supports image input. The model consists of a diffu-
+sion transformer and a visual encoder.
+
+MDT is a multi-modal policy network that integrates the
+pre-trained multi-modal feature extractor named Voltron.
+We also implement MoDE, which is an MoE-based pol-
+icy network that achieves the state-of-the-art performance
+on the CALVIN and LIBERO benchmarks. In the experi-
+ments, we consider compressing the widely used Diffusion
+Policies, including Diffusion-Policy-T [8], and MDT [36].
+Diffusion-Policy-T [8] is a transformer-based policy net-
+work for imitation learning that supports only image input.
+MDT [36], by integrating the pre-trained multi-modal fea-
+ture extractor named Voltron [21], MDT has achieved good
+results on the CALVIN dataset.
+
+Implementation Details. Our implementation is based on
+PyTorch. We conducted training on NVIDIA RTX 3090
+and H800 GPUs. Then, we converted the model trained on
+GPU to Core ML model format (mlpackage, based on Ap-
+ple’s ml-stable-diffusion) and measured latency in Xcode
+Instruments on an iPhone 13 (A15 Bionic, 10S 18.3.1). For
+
+network pruning, we adopt the local block pruning scheme
+from TinyFusion [10] to build up a local block with scheme
+N:M. In this N:M scheme, each group of MM consecutive
+layers (a “block’) is pruned down to WN layers.. For instance,
+when we keep NV = 3 layers from a local block with M = 4
+layers in total, we have (3) = 4 choices, corresponding
+to M = [[1,1,1,0], [1, 1,0, 1], [1,0,1, 1], [0,1,1,1]]. Our
+consistency distillation is applied to the model’s xo pre-
+diction (predicting the denoised action), following com-
+mon practice, and we start the EMA decay rate at 0.95 and
+gradually increase it to 0.999 over the course of training
+to stabilize the Target model updates. We use the DDIM
+Solver [40] for distillation, with a skip interval of 10 steps
+(i.e., distill every 10th diffusion step). We keep the most
+hyper-parameters consistent with the original implementa-
+tion of the base models. For DP-T, the input is a hybrid of
+RGB image and low-dimension state, the size of image is
+84 x 84, and the observation sequence length is set as 2, the
+transformer block of the diffusion transformer is with the
+hidden size of 256, the number of heads is 4, and the number
+of layers in DP-T is 8. For MDT, the input is multi-modal,
+which includes two RGB images at different views as ob-
+servation and a language instruction as the goal. We adopt
+AdamwW as the optimizer with a learning rate of le — 4, and
+the batch size is set as 64. We train the model for 30 epochs
+on the CALVIN datasets, within the last epochs, the Student
+Model fs is pruned based on the gate score at 20-th epoch.
+
+5.3. Evaluation on DiffusionPolicy Transformer
+
+In this section, we conduct the experiments based on DP-T
+as reported in Table 2, we can find that the pruned model can
+achieve a comparable success rate with the original model,
+but with a smaller model size and faster inference speed.
+
+Quantitative Results. The vanilla DP-T model contains
+8 transformer blocks with alternative Multi-head Cross-
+Attention layers and Feed-Forward layers. The model is
+first trained to obtain an optimal pruning mask with the net-
+work weight updated jointly, then the model is pruned and
+trained via a consistency distillation loss. In our setting, we
+compress the model into 2, 4, and 6 layers. The results show
+that through our method, the pruned model can achieve a
+comparable success rate with the vanilla model. As we dis-
+cuss in When N://=1:2, each two successive blocks are
+grouped with one block pruned. With the same depth, we
+observe that when the capacity M of the block is reduced,
+the performance will be slightly reduced, since large M
+can provide more diverse pruning choices. Besides, from
+the perspective of the depth of the pruned model, we find
+that the performance of the larger depth model remains bet-
+ter than the smaller one, which is consistent with the intu-
+ition, but the performance gap is not significant. Especially,
+we find a 2-layer diffusion transformer can achieve a suc-
+cess rate with 0.724, which is quite close to the original
+
+
+Method Depth Param(M) NFE GFLOPs_ Inference Speed(ms) Success Rate
+DP-T 0.772+0.039
+DP-T* 8 8.97 100 4.39 90.6 0.75440.023
+DP-T-D6/6-8 0.752+0.019
+DP-T-D6/4-4 6 6.87 4 0.134 4.79 0.732+40.034
+DP-T-D4/4-8 0.747+0.010
+DP-T-D4/2-4 4 4.76 4 0.091 2.72 0.732+0.013
+DP-T-D4/1-2 0.757+0.018
+DP-T-D2/2-8 0.73040.022
+DP-T-D2/1-4 2.65 4 0.049 0.97 0.724+0.030
+
+Table 2. Performance comparison of LightDP compressed models with varying depth and inference steps. All models are trained on the
+same Push-T dataset for 3K epochs. DP-T™ refers to the baseline model evaluated by us. DP-T-DL/N-M indicates that L blocks are
+retained during the pruning process, with a local block scheme of N:M. NFE is short for the number of score function evaluations, i.e.,
+inference steps. Detailed experiments on the Robomimic dataset are provided in Section H.
+
+model with 0.754. In contrast, the latency of the pruned
+model is greatly diminished when compared to the DP-T
+model. With the number of inference steps cut down to
+4 and the depth limited to 2, we attain approximately 93
+times speed improvement, and the FLOPs are decreased by
+89.6%. These results indicate that our proposed LightDP
+successfully compresses the model while preserving the
+original model’s performance.
+
+5.4. Evaluation on MDT-V
+
+In this section, we conduct the experiments based on MDT-
+V as reported in Table 3. Since MDT-V consists of 4-layer
+TransformerEncoder and 4-layer TransformerDecoder, we
+keep the number of encoder layers the same as the decoder
+layers, therefore, we compress the model into 2, 4, and 6
+layers as well as DP-T. Compared with the original model,
+the 6-layer model achieves comparable performance, while
+the 4-layer model has a significant performance drop and
+the 2-layer model has the worst performance. The results
+show the MDT-V model is more compact than the DP-T
+model. In addition, as detailed in Table 3, the ABCD-—>D
+results reveal that the full MDT model attains very high suc-
+cess percentages across the chain (e.g., 98.6% on the first
+instruction, gradually decreasing to 80.1%), with an aver-
+age chain length of 4.52. In contrast, the pruned variants
+show a noticeable decline in performance, where MDT-
+V/E1-D1, for instance, achieves only 92.3% initially and
+drops to 61.4%, with a reduced average chain length of
+3.44. Similarly, in the DD scenario, all models register
+lower performance, with the most compressed model suf-
+fering from a steep decline in both success rate and average
+chain length. These observations underscore the trade-off
+between model compactness and performance, highlight-
+ing that even a slight reduction in network depth can sub-
+
+stantially impact the ability to sustain performance over
+extended inference sequences. Besides, we also conduct
+the experiments on the LIBERO datasets shown in Table 4,
+by comparing MDT-V and MDT-V/E3-D3 across LIBERO
+task suites, we find that the pruned model achieves com-
+parable performance with the original model. On average,
+while MDT-V shows a marginally better overall result with
+less variability, the inference speed and model size are re-
+duced significantly, which could be beneficial for deploy-
+ment on mobile devices.
+
+5.5. Ablation Study
+
+In this section, we ablate the effectiveness of the proposed
+method by removing the consistency distillation and learn-
+able pruning. As shown in Table 5, when learnable pruning
+is applied (MDT-V w/prune), we observe a reduction in the
+number of parameters and GFLOPs, along with slightly re-
+duced latency (from 22.25ms to 18.87ms), while preserving
+similar behavior in the generated actions. Likewise, em-
+ploying consistency distillation (MDT-V w/CD) consider-
+ably reduces the GFLOPs and latency with only minimal
+reduction in the average rollout length. Notably, the com-
+bined approach (MDT-V/E3-D3) delivers the best trade-
+off by minimizing latency and computational cost, thereby
+demonstrating the efficiency of our design modifications
+without significant degradation in performance.
+
+5.6. Qualitative Results
+
+Figure 3 displays rollout of the pruned DP-T and MDT-V
+models on the Push-T and LIBERO tasks. In the Push-T
+task, the pruned model successfully pushed the T-shaped
+block into the goal zone, without any failure in the manipu-
+lation process. And in the LIBERO task suite that requires
+the agent to follow the instructions to manipulate the ob-
+
+
+Instructions in a Row (1000 chains)
+
+Training — Test Method Param (M) GFLOPs Latency (ms) i 7 3 7 5 Average Length
+MDT-V 22.52 1.21 22.25 98.6% 95.8% 91.6% 86.2% 80.1% 4.524(0.02)
+ABCD-—>D MDT-V/E3-D3 17.50 0.36 8.7 98.3% 94.6% 91.5% 85.8% 79.6% 4.504(0.06)
+MDT-V/E2-D2 12.47 0.25 4.1 95.1% 87.9% 80.5% 71.9% 64.1% 3.94+4(0.08)
+MDT-V/E1-D1 745 0.13 3.39 92.3% 85.4% 77.2% 65.9% 61.4% 3.44+4(0.05)
+MDT-V 22.52 1.21 22.25 93.7% 84.5% 74.1% 644% 55.6% 3.724(0.06)
+D>D MDT-V/E3-D3 17.50 0.36 8.7 92.4% 82.1% 71.2% 60.5% 52.2% 3.65+4(0.05)
+MDT-V/E2-D2 12.47 0.25 4.1 87.1% 71.2% 58.7% 48.3% 37.9% 3.00+4(0.03)
+MDT-V/E1-D1 745 0.13 3.39 79.9% 63.2% 47.8% 35.0% 23.1% 2.484(0.07)
+
+Table 3. Performance comparison of LightDP compressed MDT-V models with different depth and inference steps. All models are trained
+on the CALVIN D or CALVIN ABCD for 30 epochs, and then tested on the CALVIN D dataset.
+
+Task Spatial Object Goal Long 90 Average
+
+MDT-V FB5£1.5 8750.9 73.5£2.0 64.8415 67.2411 74.349.1
+
+MDT-V/E3-D3_77.9£1.9 86.5£2.1 71543.1 63.2423 66.8408 73.249.9
+Table 4. Performance comparison of LightDP compressed
+
+MDT-V/E3-D3 model on the benchmark LIBERO. For each
+task, the achieved score is presented along with its variability
+(mean-tstandard deviation)
+
+Method Param (M) GFLOPs_ Latency(ms) Average Length
+MDT-V 22.52 1.21 22.25 3.72+(0.06)
+MDT-V w/ prune 17.50 0.91 18.87 3.70+4(0.08)
+MDT-V w/ CD 22.52 0.48 11.34 3.69+(0.02)
+MDT-V/E3-D3 17.50 0.36 8.70 3.65+(0.05)
+
+Table 5. Ablation study on the effect of the proposed learnable
+pruning and step distillation based on MDT-V, the performance
+is evaluated on the CALVIN D->D task suite. w/ prune means
+learnable pruning technique, and w/ CD means step distillation.
+MDT-V/E3-D3 combines learnable pruning and step distillation.
+
+DP-T-D2/2-8 oy >» ~~ a *
+DP-T oy er ~~ A> PS
+
+ EReeren
+SZaraearue
+
+Put the bowl into the drawer
+
+Figure 3. Qualitative comparison of the pruned models and orig-
+inal models. We observe that the pruned models can mimic the
+behaviors of the original models, which demonstrates the step dis-
+tillation process is capable of transferring the knowledge from the
+original model to the pruned model.
+
+jects on the table to achieve the goal, the pruned model can
+also successfully complete the task. By adopting LightDP
+on the original DP-T and MDT-V models, we obtain the
+lightweight policy models. Here we present the visual com-
+parison between the pruned model and the original model.
+
+With the rollouts in the Push-T task and the CALVIN tasks.
+In Figure 3, the upper two rows present the pruned model
+DP-T-D2/2-8 and DP-T on the Push-T task, and the bot-
+tom two rows show the pruned model MDT-V/E3-D3 and
+the original model MDT-V. We observe that the pruned
+models can mimic the behaviors of the original models,
+which demonstrates the step distillation process is capable
+of transferring the knowledge from the original model to
+the pruned model. Except for the experiments on simula-
+tion environments, we also conduct the real-world experi-
+ments on robotic arms as presented in Section I. The results
+show that the pruned model can achieve a comparable suc-
+cess rate with the original model, which demonstrates the
+effectiveness of our method in real-world scenarios.
+
+6. Conclusion and Limitation
+
+In this paper, we introduced the LightDP framework, aim-
+ing at accelerating Diffusion Policies on the mobile devices.
+Specifically, we analyze the architecture of the widely-used
+DP-T and MDT-V baselines, observe the iterative denois-
+ing process, and the high cost of the network inference hur-
+dles the real-time application of these models on the mo-
+bile robots. To address this issue, we employed two strate-
+gies: 1) adopting a lightweight network architecture via a
+learnable pruning method, and 2) reducing the number of
+inference steps to speed up the denoising process. We have
+benchmarked the proposed LightDP framework on Push-T,
+Robomimic, CALVIN, and LIBERO datasets, demonstrat-
+ing a significant improvement in terms of inference speed
+and memory consumption.
+
+Limitations. In this paper, we mainly focus on the Dif-
+fusion Policies, while the new proposed VLA models are
+not well explored in this work. We leave this as the future
+work.
+
+References
+
+[1] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail,
+Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom,
+Karol Hausman, Brian Ichter, Szymon Jakubczak, Tim
+Jones, Liyiming Ke, Sergey Levine, Adrian Li-Bell, Mohith
+Mothukuri, Suraj Nair, Karl Pertsch, Lucy Xiaoyang Shi,
+
+
+[2]
+
+[3]
+
+[4]
+
+[5]
+
+[6]
+
+[7]
+
+[8]
+
+[9]
+
+[10]
+
+[11]
+
+James Tanner, Quan Vuong, Anna Walling, Haohuan Wang,
+and Ury Zhilinsky. 79: A vision-language-action flow model
+for general robot control, 2024. |
+
+Kevin Black, Manuel Y Galliker, and Sergey Levine. Real-
+time execution of action chunking flow policies.
+preprint arXiv:2506.07339, 2025. 2
+
+Thomas Blumensath and Mike E Davies. Iterative threshold-
+ing for sparse approximations. Journal of Fourier analysis
+and Applications, 14:629-654, 2008. 4
+
+Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen
+Chebotar, Joseph Dabis, Chelsea Finn, Keerthana Gopalakr-
+ishnan, Karol Hausman, Alexander Herzog, Jasmine Hsu,
+Julian Ibarz, Brian Ichter, Alex Irpan, Tomas Jackson, Sally
+Jesmonth, Nikhil J. Joshi, Ryan Julian, Dmitry Kalash-
+nikov, Yuheng Kuang, Isabel Leal, Kuang-Huei Lee, Sergey
+Levine, Yao Lu, Utsav Malla, Deeksha Manjunath, Igor
+Mordatch, Ofir Nachum, Carolina Parada, Jodilyn Peralta,
+Emily Perez, Karl Pertsch, Jornell Quiambao, Kanishka Rao,
+Michael S. Ryoo, Grecia Salazar, Pannag R. Sanketi, Kevin
+Sayed, Jaspiar Singh, Sumedh Sontakke, Austin Stone, Clay-
+ton Tan, Huong T. Tran, Vincent Vanhoucke, Steve Vega,
+Quan Vuong, Fei Xia, Ted Xiao, Peng Xu, Sichun Xu,
+Tianhe Yu, and Brianna Zitkovich. RT-1: robotics trans-
+former for real-world control at scale. In Robotics: Science
+and Systems, 2023. 1
+
+Thibault Castells, Hyoung-Kyu Song, Tairen Piao, Shinkook
+Choi, Bo-Kyeong Kim, Hanyoung Yim, Changgwun Lee,
+Jae Gon Kim, and Tae-Ho Kim. Edgefusion: On-device
+text-to-image generation. arXiv preprint arXiv:2404.11925,
+2024. 2
+
+Zhenghao Chen, Lucas Relic, Roberto Azevedo, Yang
+Zhang, Markus Gross, Dong Xu, Luping Zhou, and Christo-
+pher Schroers. Neural video compression with spatio-
+temporal cross-covariance transformers. In Proceedings
+of the 31st ACM International Conference on Multimedia,
+pages 8543-8551, 2023. 2
+
+Zhenghao Chen, Luping Zhou, Zhihao Hu, and Dong
+Xu. Group-aware parameter-efficient updating for content-
+adaptive neural video compression. In Proceedings of the
+32nd ACM International Conference on Multimedia, pages
+11022-11031, 2024. 2
+
+Cheng Chi, Zhenjia Xu, Siyuan Feng, Eric Cousineau, Yilun
+Du, Benjamin Burchfiel, Russ Tedrake, and Shuran Song.
+Diffusion policy: Visuomotor policy learning via action dif-
+fusion. The International Journal of Robotics Research,
+2023. 1, 2, 6
+
+Gongfan Fang, Xinyin Ma, Mingli Song, Michael Bi Mi, and
+Xinchao Wang. Depgraph: Towards any structural pruning.
+In CVPR, 2023. 2
+
+Gongfan Fang, Kunjun Li, Xinyin Ma, and Xinchao Wang.
+Tinyfusion: Diffusion transformers learned shallow. In
+CVPR, pages 18144-18154, 2025. 4, 6
+
+Gongfan Fang, Hongxu Yin, Saurav Muralidharan, Greg
+Heinrich, Jeff Pool, Jan Kautz, Pavlo Molchanov, and Xin-
+chao Wang. Maskllm: Learnable semi-structured sparsity
+for large language models. Advances in Neural Information
+Processing Systems, 37:7736-7758, 2025. 4
+
+arXiv
+
+[12]
+
+[13]
+
+[14]
+
+[15]
+
+[16]
+
+[17]
+
+[18]
+
+[19]
+
+[20]
+
+[21]
+
+[22]
+
+[23]
+
+[24]
+
+[25]
+
+[26]
+
+Pete Florence, Corey Lynch, Andy Zeng, Oscar A Ramirez,
+Ayzaan Wahid, Laura Downs, Adrian Wong, Johnny Lee,
+Igor Mordatch, and Jonathan Tompson. Implicit behavioral
+cloning. In Conference on robot learning, pages 158-168.
+PMLR, 2022. 5
+
+Jonathan Frankle and Michael Carbin. The lottery ticket hy-
+pothesis: Finding sparse, trainable neural networks. In JCLR,
+2019. 1
+
+Elias Frantar and Dan Alistarh. Sparsegpt: Massive lan-
+guage models can be accurately pruned in one-shot. In Jn-
+ternational Conference on Machine Learning, pages 10323-
+10337. PMLR, 2023. 4
+
+Zipeng Fu, Tony Z. Zhao, and Chelsea Finn. Mobile
+aloha: Learning bimanual mobile manipulation with low-
+cost whole-body teleoperation. In Conference on Robot
+Learning, 2024. 1, 2
+
+Isma Hadji, Mehdi Noroozi, Victor Escorcia, Anestis Za-
+ganidis, Brais Martinez, and Georgios Tzimiropoulos. Edge-
+sd-sr: Low latency and parameter efficient on-device super-
+resolution with stable diffusion via bidirectional condition-
+ing. In CVPR, pages 12789-12798, 2025. 2
+
+Song Han, Jeff Pool, John Tran, and William J Dally. Learn-
+ing both weights and connections for efficient neural net-
+work. In NeurIPS, 2015. 2
+
+Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the
+knowledge in a neural network. In NIPS Workshop, 2014. 2
+Jonathan Ho and Tim Salimans. Classifier-free diffusion
+guidance. In NeurIPS 2021 Workshop on Deep Generative
+Models and Downstream Applications, 2021. 2
+
+Eric Jang, Shixiang Gu, and Ben Poole.
+reparameterization with gumbel-softmax.
+arXiv: 1611.01144, 2016. 4
+
+Siddharth Karamcheti, Suraj Nair, Annie S. Chen, Thomas
+Kollar, Chelsea Finn, Dorsa Sadigh, and Percy Liang.
+Language-driven representation learning for robotics. In
+Robotics: Science and Systems, 2023. 4, 6
+
+Tero Karras, Miika Aittala, Timo Aila, and Samuli Laine.
+Elucidating the design space of diffusion-based generative
+models. pages 26565-26577, 2022. 2, 3
+
+Bo-Kyeong Kim, Hyoung-Kyu Song, Thibault Castells, and
+Shinkook Choi. Bk-sdm: A lightweight, fast, and cheap ver-
+sion of stable diffusion. In ECCV, 2024. 1, 2
+
+Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted Xiao,
+Ashwin Balakrishna, Suraj Nair, Rafael Rafailov, Ethan P
+Foster, Pannag R Sanketi, Quan Vuong, Thomas Kollar,
+Benjamin Burchfiel, Russ Tedrake, Dorsa Sadigh, Sergey
+Levine, Percy Liang, and Chelsea Finn. OpenVLA: An
+open-source vision-language-action model. In Conference
+on Robot Learning, 2024. |
+
+Hao Li, Asim Kadav, Igor Durdanovic, Hanan Samet, and
+Hans Peter Graf. Pruning filters for efficient convnets. In
+ICLR, 2017. 2
+
+Xinghang Li, Minghuan Liu, Hanbo Zhang, Cunjun Yu, Jie
+Xu, Hongtao Wu, Chilam Cheang, Ya Jing, Weinan Zhang,
+Huaping Liu, et al. Vision-language foundation models as
+effective robot imitators. In JCLR, 2024. |
+
+Categorical
+arXiv preprint
+
+
+[27]
+
+[28]
+
+[29]
+
+[30]
+
+[31]
+
+[32]
+
+[33]
+
+[34]
+
+[35]
+
+[36]
+
+[37]
+
+[38]
+
+[39]
+
+[40]
+
+[41]
+
+[42]
+
+Yanyu Li, Huan Wang, Qing Jin, Ju Hu, Pavlo Chemerys,
+Yun Fu, Yanzhi Wang, Sergey Tulyakov, and Jian Ren. Snap-
+fusion: Text-to-image diffusion model on mobile devices
+within two seconds. In NeurIPS, 2023. 2
+
+Bo Liu, Yifeng Zhu, Chongkai Gao, Yihao Feng, Qiang Liu,
+Yuke Zhu, and Peter Stone. Libero: Benchmarking knowl-
+edge transfer for lifelong robot learning. Advances in Neural
+Information Processing Systems, 36:44776-44791, 2023. 6
+Simian Luo, Yiqin Tan, Longbo Huang, Jian Li, and Hang
+Zhao. Latent consistency models: Synthesizing high-
+resolution images with few-step inference. arXiv preprint
+arXiv:2310.04378, 2023. 2
+
+Oier Mees, Lukas Hermann, Erick Rosete-Beas, and Wol-
+fram Burgard. Calvin: A benchmark for language-
+conditioned policy learning for long-horizon robot manip-
+ulation tasks. IEEE Robotics and Automation Letters, 7(3):
+7327-7334, 2022. 6
+
+Xin Men, Mingyu Xu, Qingyu Zhang, Bingning Wang,
+Hongyu Lin, Yaojie Lu, Xianpei Han, and Weipeng Chen.
+Shortgpt: Layers in large language models are more redun-
+dant than you expect. arXiv preprint arXiv:2403.03853,
+2024. 1
+
+Chenlin Meng, Ruiqi Gao, Diederik P Kingma, Stefano Er-
+mon, Jonathan Ho, and Tim Salimans. On distillation of
+guided diffusion models. In CVPR, 2023. 2
+
+Pavlo Molchanov, Stephen Tyree, Tero Karras, Timo Aila,
+and Jan Kautz. Pruning convolutional neural networks for
+resource efficient inference. In JCLR, 2017. 2
+
+Michael C Mozer and Paul Smolensky. Skeletonization: A
+technique for trimming the fat from a network via relevance
+assessment. In NeurIPS, 1988. 2
+
+Moritz Reuss, Maximilian Li, Xiaogang Jia, and Rudolf Li-
+outikov. Goal-conditioned imitation learning using score-
+based diffusion policies, 2023. 2
+
+Moritz Reuss, Omer Erding Yagmurlu, Fabian Wenzel, and
+Rudolf Lioutikov. Multimodal diffusion transformer: Learn-
+ing versatile behavior from multimodal goals. In Robotics:
+Science and Systems, 2024. 1, 2, 6
+
+Moritz Reuss, Jyothish Pari, Pulkit Agrawal, and Rudolf Li-
+outikov. Efficient diffusion transformer policies with mixture
+of expert denoisers for multitask learning. In JCLR, 2025. 1,
+2
+
+Tim Salimans and Jonathan Ho. Progressive distillation for
+fast sampling of diffusion models. In JCLR, 2022. 2
+Mustafa Shukor, Dana Aubakirova, Francesco Capuano,
+Pepijn Kooijmans, Steven Palma, Adil Zouitine, Michel Ar-
+actingi, Caroline Pascal, Martino Russi, Andres Marafioti,
+et al. Smolvla: A vision-language-action model for afford-
+able and efficient robotics. arXiv preprint arXiv:2506.01844,
+2025. 2
+
+Jiaming Song, Chenlin Meng, and Stefano Ermon.
+Denoising diffusion implicit models. arXiv preprint
+arXiv:2010.02502, 2020. 2, 6
+
+Yang Song and Prafulla Dhariwal. Improved techniques for
+training consistency models. In JCLR, 2024. 2
+
+Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Ab-
+hishek Kumar, Stefano Ermon, and Ben Poole. Score-based
+
+10
+
+[43]
+
+[44]
+
+[45]
+
+[46]
+
+[47]
+
+[48]
+
+[49]
+
+[50]
+
+[51]
+
+[52]
+
+[53]
+
+generative modeling through stochastic differential equa-
+tions. In JCLR, 2021. 2
+
+Yang Song, Prafulla Dhariwal, Mark Chen, and Ilya
+Sutskever. Consistency models. In Int. Conf: Mach. Learn.,
+pages 32211-32252. PMLR, 2023. 2
+
+Octo Model Team, Dibya Ghosh, Homer Walke, Karl
+Pertsch, Kevin Black, Oier Mees, Sudeep Dasari, Joey
+Hejna, Tobias Kreiman, Charles Xu, Jianlan Luo, You Liang
+Tan, Lawrence Yunliang Chen, Pannag Sanketi, Quan
+Vuong, Ted Xiao, Dorsa Sadigh, Chelsea Finn, and Sergey
+Levine. Octo: An open-source generalist robot policy, 2024.
+1
+
+Huan Wang, Can Qin, Yulun Zhang, and Yun Fu. Neural
+pruning via growing regularization. In JCLR, 2021. 2
+Hongtao Wu, Ya Jing, Chilam Cheang, Guangzeng Chen,
+Jiafeng Xu, Xinghang Li, Minghuan Liu, Hang Li, and Tao
+Kong. Unleashing large-scale video generative pre-training
+for visual robot manipulation. In JCLR, 2024. |
+
+Enze Xie, Junsong Chen, Yuyang Zhao, Jincheng YU,
+Ligeng Zhu, Yujun Lin, Zhekai Zhang, Muyang Li, Junyu
+Chen, Han Cai, Bingchen Liu, Daquan Zhou, and Song Han.
+SANA 1.5: Efficient scaling of training-time and inference-
+time compute in linear diffusion transformer. In Int. Conf:
+Mach. Learn., 2025. 2
+
+Yanwu Xu, Yang Zhao, Zhisheng Xiao, and Tingbo Hou.
+Ufogen: You forward once large scale text-to-image genera-
+tion via diffusion gans. In CVPR, 2024. 2
+
+Yang Yue, Yulin Wang, Bingyi Kang, Yizeng Han, Shenzhi
+Wang, Shiji Song, Jiashi Feng, and Gao Huang. Deer-VLA:
+Dynamic inference of multimodal large language models for
+efficient robot execution. In NeurIPS, 2024. 1, 2
+
+Yanjie Ze, Gu Zhang, Kangning Zhang, Chenyuan Hu,
+Muhan Wang, and Huazhe Xu. 3d diffusion policy: Gen-
+eralizable visuomotor policy learning via simple 3d repre-
+sentations. In Proceedings of Robotics: Science and Systems
+(RSS), 2024. 2
+
+Tony Z. Zhao, Vikash Kumar, Sergey Levine, and Chelsea
+Finn. Learning fine-grained bimanual manipulation with
+low-cost hardware. In Robotics: Science and Systems, 2023.
+1
+
+Yang Zhao, Yanwu Xu, Zhisheng Xiao, and Tingbo Hou.
+Mobilediffusion: Subsecond text-to-image generation on
+mobile devices. arXiv preprint arXiv:2311.16567, 2023. 2
+Brianna Zitkovich, Tianhe Yu, Sichun Xu, Peng Xu, Ted
+Xiao, Fei Xia, Jialin Wu, Paul Wohlhart, Stefan Welker,
+Ayzaan Wahid, Quan Vuong, Vincent Vanhoucke, Huong
+Tran, Radu Soricut, Anikait Singh, Jaspiar Singh, Pierre
+Sermanet, Pannag R. Sanketi, Grecia Salazar, Michael S.
+Ryoo, Krista Reymann, Kanishka Rao, Karl Pertsch, Igor
+Mordatch, Henryk Michalewski, Yao Lu, Sergey Levine,
+Lisa Lee, Tsang-Wei Edward Lee, Isabel Leal, Yuheng
+Kuang, Dmitry Kalashnikov, Ryan Julian, Nikhil J. Joshi,
+Alex Irpan, Brian Ichter, Jasmine Hsu, Alexander Herzog,
+Karol Hausman, Keerthana Gopalakrishnan, Chuyuan Fu,
+Pete Florence, Chelsea Finn, Kumar Avinava Dubey, Danny
+Driess, Tianli Ding, Krzysztof Marcin Choromanski, Xi
+Chen, Yevgen Chebotar, Justice Carbajal, Noah Brown, An-
+thony Brohan, Montserrat Gonzalez Arenas, and Kehang
+
+
+Han. Rt-2: Vision-language-action models transfer web
+knowledge to robotic control. In Conference on Robot
+Learning, pages 2165-2183. PMLR, 2023. 1
+
+11
+
+
+On-Device Diffusion Transformer Policy for Efficient Robot Manipulation
+
+Supplementary Material
+
+MoDE-D10/10-12 MoDE-D10/10-12 ~ MoDE-D10/10-12
+7%
+
+Task3: Pick up the
+cup and pour ‘Task4: Pick up the lemon
+
+ae =z ] per \ —— ODE \ Y 7
+z p the
+
+Figure Al. Real-world experiments for DP-T (first column) and
+MoDE (other columns). Task descriptions are shown below each
+image. This figure contains an animated video. For optimal view-
+ing, please zoom in and use a professional PDF reader.
+
+G. Supplementary Material
+
+The supplement consists of the following sections:
+
+¢ Section H presents the extensive experimental results on
+Robomimic dataset based on the DiffusionPolicy Trans-
+former (DP-T) model.
+
+¢ Section I describes the real-world experiments based on
+DP-T and MoDE models, including the experimental
+setup and results.
+
+We provide a webpage to visualize the results of the
+
+pruned models and original models, which can be found at
+
+https://weleen.github.io/LightDP/.
+
+H. Extensive Experiments based on DP-T
+
+Models Lift-ph Can-ph Square-ph_ Transport-ph Push-T ToolHang-ph
+DP-T 1.000 1.000 1.000 0.955 0.772 0.713
+DP-T-D6/6-8 1.000 1.000 1.000 0.950 0.752 0.707
+Models Lift-mh Can-mh Square-mh Transport-mh Kitchen Block Push
+DP-T 1.000 1.000 0.940 0.727 0.574 1.000
+DP-T-D6/6-8 1.000 1.000 0.955 0.773 0.571 1.000
+
+Table Al. The extensive evaluation on DP-T tasks (Push-T and
+Robomimic), showing the success rates of the original model (DP-
+T) and the pruned model (DP-T-D6/6-8). The pruned model main-
+tains performance across most tasks, with only minor drops in suc-
+cess rates.
+
+In Table Al, we have provided success rate on all tasks
+(i.e., Push-T and Robomimic) in the Diffusion Policy [8]
+work, which indicate that the pruned model DP-T-D6/6-8
+preserves the baseline’s performance on most tasks, and the
+performance only drops by less than 0.02 on the tasks.
+
+I. Real-world Experiments
+
+Based on two models DP-T and MoDE, we deploy our
+LightDP on two robotic arms (an Inovo robot for DP-T
+
+Models Task 1 Models Task2 Task3 Task4
+
+DP-T 0.80 MoDE 0.80 0.55 0.30
+DP-T-D6/6-8 0.75 MoDE-10/10-12. 0.75 0.50 0.30
+
+Table A2. Real-world evaluation results based on DP-T (on a In-
+ovo Robot) and MoDE (on a Lebai Robot). The success rates
+are shown for each task, with the pruned model (DP-T-D6/6-8
+and MoDE-10/10-12) maintaining performance across most tasks,
+with only minor drops in success rates.
+
+and a Lebai robot for MoDE), where each task is executed
+by 20 times. As shown in Figure Al and Table A2, the
+pruned model achieves a comparable success rate on these
+real-world tasks. Considering that most household users are
+often redundant to purchase advanced device, we selected
+the most accessible and portable device (i.e., iPhone) as
+the computing platform for our robotic development setup.
+Moreover, we also evaluate our approach based on a Jetson
+Orin NX (16 GB, Jetpack 5.1.1), the latency is 244.68ms
+(resp., 37.69ms) based on DP-T (resp., DP-T-D6/6-8).
