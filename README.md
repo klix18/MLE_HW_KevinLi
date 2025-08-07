@@ -13,7 +13,13 @@ This repo contains my homework and notes for each week of the MLE course. Each w
 
 ## 🗓️ Weekly Breakdown
 
-### Week 1: 🧱 Introduction t o Large Language Models (LLMs) and Prompt Engineering
+### Week 1: 🧱 Introduction to Large Language Models (LLMs) and Prompt Engineering
+- 🔬 **Main Learnings** 
+  - **MCP Frameworks (Model Context Protocol):** A framework that allows language models to interact seamlessly with external tools and data sources, enabling more AI capabilities.
+  - **Locally Run Models:** Ran models locally, like Llama.
+  - **LangChain:** Simple framework to build LLM-powered applications by chaining prompts and tools.
+  - **Gradio:** Python library to quickly create and host web UIs for AI models.
+
 - 📝 **Project 1.3:** Testing Puppeteer in Claude
   - 📌 *Note:* Puppeteer only takes screenshots within its environment inside Claude.
 - 📝 **Project 3.1:** Prompt Engineering with Langchain
