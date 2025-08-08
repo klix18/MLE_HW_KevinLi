@@ -28,6 +28,15 @@ This repo contains my homework and notes for each week of the MLE course. Each w
 ---
 
 ### Week 2: ⚙️ LLM Training Phases and Data Requirements
+- 🔬 **Main Learnings** 
+  - **Self-Attention:** A mechanism where each token in a sequence considers and weighs every other token to capture their relationships and context within the same input.
+  - **Multi-Head Attention:** A process where multiple self-attention mechanisms run in parallel, allowing the model to capture diverse types of relationships by focusing on different aspects of the data simultaneously.
+  - **Parameters:** Model components such as weights and biases (e.g., Q, K, V matrices) that are learned and updated during training to optimize performance.
+  - **Hyperparameters:** Settings like learning rate, batch size, and number of layers that are chosen before training and control how the model is built and learns, rather than being learned from data.
+  - **Context Window:** The maximum number of tokens the model can process at once, which limits how much information it can consider at a time during training or inference.
+  - **Quantization:** A method of converting model weights and activations from high-precision (e.g., float32) to lower-precision (e.g., int8) to reduce memory use and speed up inference, usually with a minor loss in accuracy.
+  - **Mixed Precision:** A training and inference technique where both float16 and float32 are used together to save memory and increase computational speed while maintaining model stability.
+
 - 📝 **Project 1.1:** Tesseract OCR
   - 📌 *Note:* I tried best practices by cleaning the input image to black and white, and cleaned up grains. However, the output was actually worse than the uncleaned version. This may be because I'm cleaning it wrong, or because of limitations of tesseract itself.
 - 📝 **Project Bonus.1:** HTML scraping with trafilatura and extracting with tesseract
