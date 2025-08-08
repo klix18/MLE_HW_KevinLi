@@ -1,7 +1,7 @@
 # Week 2
 
 - Performed OCR on images using **Tesseract**
-  - **Tesseract** – open‑source OCR engine for extracting English and Chinese text
+  - **Tesseract** – open‑source OCR engine for extracting text (multi-language support)
     
 - Scraped latest **arXiv** cs.AI papers and extracted abstracts with **Trafilatura**
   - **Trafilatura** – library for converting and cleaning HTML into plain text/JSON
