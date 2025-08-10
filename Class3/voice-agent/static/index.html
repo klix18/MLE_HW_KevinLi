@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voice Agent</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Gasoek+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #1C1430;
+      --card-bg: #2A1F45;
+      --accent: #846196;
+      --white: #FFFFFF;
+    }
+
+    body {
+      font-family: 'Geist', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--white);
+      margin: 24px;
+    }
+
+    h1 {
+      font-family: 'Gasoek One', sans-serif;
+      font-size: 8rem;
+      margin-top: -12px;
+      margin-bottom: 12px;
+      color: var(--white);
+      text-shadow: 0 0 8px rgba(255,255,255,0.8);
+    }
+
+    .pill {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.1);
+      color: var(--accent);
+    }
+
+    .cards-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      flex: 1 1 30%;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 12px rgba(255,255,255,0.05);
+    }
+
+    .card h3 {
+      margin-top: 0;
+      color: var(--accent);
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: var(--accent);
+      color: var(--bg-dark);
+      font-weight: bold;
+    }
+
+    button.cancel-btn {
+      background: #ff4d4d;
+      color: var(--white);
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    /* Chat styling */
+    #chat {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+
+    #chat::-webkit-scrollbar { width:8px }
+    #chat::-webkit-scrollbar-thumb {
+      background: rgba(186,237,245,.35);
+      border-radius:8px;
+    }
+    #chat::-webkit-scrollbar-track { background: transparent }
+
+    .msg {
+      max-width: 680px;
+      padding: 10px 12px;
+      border-radius: 14px;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: rgba(232,240,255,0.15);
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.08);
+    }
+    .msg .role {
+      font-size: 12px;
+      opacity: .7;
+      margin-bottom: 4px;
+    }
+
+    /* Log styling */
+    .log {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: .85;
+      white-space: pre-wrap;
+      max-height: 160px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .log::-webkit-scrollbar { width:8px }
+    .log::-webkit-scrollbar-thumb {
+      background: rgba(186,237,245,.25);
+      border-radius:8px;
+    }
+    .log::-webkit-scrollbar-track { background: transparent }
+  </style>
+</head>
+<body>
+  <h1>🎤 The Voice Agent</h1>
+  <span class="pill">POST /chat/ → WAV reply</span>
+
+  <div class="cards-row">
+    <div class="card">
+      <h3>Record from microphone</h3>
+      <div class="row">
+        <button id="recBtn">Start Recording</button>
+        <button id="cancelBtn" class="cancel-btn" style="display:none;">Cancel</button>
+        <span id="recStatus">Idle</span>
+      </div>
+      <audio id="userPreview" controls></audio>
+    </div>
+
+    <div class="card">
+      <h3>Or upload an audio file</h3>
+      <div class="row">
+        <input id="fileInput" type="file" accept="audio/*" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Agent reply</h3>
+      <audio id="agentAudio" controls></audio>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 24px;">
+    <h3>Chat history</h3>
+    <div id="chat"></div>
+  </div>
+
+  <script>
+    (async function () {
+      const recBtn = document.getElementById('recBtn');
+      const cancelBtn = document.getElementById('cancelBtn');
+      const userPreview = document.getElementById('userPreview');
+      const agentAudio = document.getElementById('agentAudio');
+      const recStatus = document.getElementById('recStatus');
+      const log = document.getElementById('log');
+      const chatEl = document.getElementById('chat');
+
+      let mediaRecorder = null;
+      let chunks = [];
+      let recording = false;
+      let partialText = "";
+      const logBuffer = [];
+
+      function logMsg(msg) {
+        logBuffer.unshift(msg);
+        if (logBuffer.length > 200) logBuffer.length = 200;
+        log.textContent = logBuffer.join('\n');
+      }
+      function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+
+      async function refreshHistory() {
+        try {
+          const res = await fetch('/history');
+          if (!res.ok) return;
+          const hist = await res.json();
+          renderHistory(hist);
+        } catch {}
+      }
+
+      function renderHistory(items) {
+        chatEl.innerHTML = '';
+        // newest first
+        const reversed = [...items].reverse();
+        for (const m of reversed) {
+          const wrap = document.createElement('div');
+          wrap.className = `msg ${m.role}`;
+          wrap.innerHTML = `
+            <div class="role">${m.role === 'user' ? 'You' : 'Assistant'}</div>
+            <div class="text">${escapeHtml(m.content)}</div>
+          `;
+          chatEl.appendChild(wrap);
+        }
+        if (recording && partialText) {
+          const wrap = document.createElement('div');
+          wrap.className = 'msg user';
+          wrap.innerHTML = `<div class="role">You (speaking…)</div><div class="text">${escapeHtml(partialText)}</div>`;
+          chatEl.insertBefore(wrap, chatEl.firstChild);
+        }
+      }
+
+      recBtn.onclick = async () => {
+        if (!recording) {
+          await startRecording();
+        } else {
+          await stopRecording();
+        }
+      };
+
+      cancelBtn.onclick = () => {
+        if (mediaRecorder && recording) {
+          recording = false;
+          mediaRecorder.stop();
+          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+          chunks = [];
+          partialText = "";
+          recStatus.textContent = 'Recording canceled – nothing sent.';
+          recBtn.textContent = 'Start Recording';
+          cancelBtn.style.display = 'none';
+          logMsg('Recording canceled – nothing sent.');
+          refreshHistory();
+        }
+      };
+
+      async function startRecording() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+          mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+          chunks = [];
+          partialText = "";
+          recording = true;
+          recBtn.textContent = 'Stop Recording';
+          cancelBtn.style.display = 'inline-block';
+          recStatus.textContent = 'Recording…';
+          logMsg('Recording started');
+
+          mediaRecorder.ondataavailable = async (e) => {
+            if (!e.data || !e.data.size) return;
+            chunks.push(e.data);
+            try {
+              const fd = new FormData();
+              fd.append('file', e.data, 'chunk.webm');
+              const res = await fetch('/asr-chunk', { method: 'POST', body: fd });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.partial) {
+                  partialText = data.partial;
+                  refreshHistory();
+                }
+              }
+            } catch {}
+          };
+
+          mediaRecorder.onstop = async () => {
+            if (!chunks.length) return;
+            const fullBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            userPreview.src = URL.createObjectURL(fullBlob);
+            recStatus.textContent = 'Processing…';
+            logMsg('Sending full audio to /chat/');
+
+            const fd = new FormData();
+            fd.append('file', fullBlob, 'full.webm');
+            const res = await fetch('/chat/', { method: 'POST', body: fd });
+            if (!res.ok) {
+              logMsg('Error: ' + await res.text());
+              recStatus.textContent = 'Error';
+              return;
+            }
+            const agentBlob = await res.blob();
+            const url = URL.createObjectURL(agentBlob);
+            agentAudio.src = url;
+            agentAudio.play().catch(()=>{});
+            recStatus.textContent = 'Idle';
+            logMsg('Agent reply played.');
+            partialText = "";
+            cancelBtn.style.display = 'none';
+            await refreshHistory();
+          };
+
+          mediaRecorder.start(750);
+        } catch (err) {
+          logMsg('Mic error: ' + err.message);
+        }
+      }
+
+      async function stopRecording() {
+        if (!mediaRecorder) return;
+        recording = false;
+        recBtn.textContent = 'Start Recording';
+        recStatus.textContent = 'Finishing…';
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        cancelBtn.style.display = 'none';
+      }
+
+      await refreshHistory();
+    })();
+  </script>
+</body>
+</html>
+
