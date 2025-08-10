@@ -178,41 +178,45 @@
 
   <script>
     (async function () {
+      // --- Elements ---
       const recBtn = document.getElementById('recBtn');
       const cancelBtn = document.getElementById('cancelBtn');
       const userPreview = document.getElementById('userPreview');
-      const agentAudio = document.getElementById('agentAudio');
+      const agentAudio = document.getElementById('agentAudio'); // kept for non-stream fallbacks
       const recStatus = document.getElementById('recStatus');
       const log = document.getElementById('log');
       const chatEl = document.getElementById('chat');
-
+      const fileInput = document.getElementById('fileInput');
+    
+      // --- State ---
       let mediaRecorder = null;
       let chunks = [];
       let recording = false;
       let partialText = "";
       const logBuffer = [];
-
-      function logMsg(msg) {
+    
+      // --- Utils ---
+      function logMsg(msg){
         logBuffer.unshift(msg);
         if (logBuffer.length > 200) logBuffer.length = 200;
         log.textContent = logBuffer.join('\n');
       }
-      function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
-
-      async function refreshHistory() {
-        try {
+      function escapeHtml(s){
+        return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+      }
+      async function refreshHistory(){
+        try{
           const res = await fetch('/history');
-          if (!res.ok) return;
+          if(!res.ok) return;
           const hist = await res.json();
           renderHistory(hist);
-        } catch {}
+        }catch{}
       }
-
-      function renderHistory(items) {
+      // Newest-first history
+      function renderHistory(items){
         chatEl.innerHTML = '';
-        // newest first
         const reversed = [...items].reverse();
-        for (const m of reversed) {
+        for (const m of reversed){
           const wrap = document.createElement('div');
           wrap.className = `msg ${m.role}`;
           wrap.innerHTML = `
@@ -221,40 +225,170 @@
           `;
           chatEl.appendChild(wrap);
         }
-        if (recording && partialText) {
+        if (recording && partialText){
           const wrap = document.createElement('div');
           wrap.className = 'msg user';
           wrap.innerHTML = `<div class="role">You (speaking…)</div><div class="text">${escapeHtml(partialText)}</div>`;
           chatEl.insertBefore(wrap, chatEl.firstChild);
         }
       }
-
+    
+      // --- Streaming audio pipeline (multipart x-mixed-replace) ---
+      async function sendStreamAndPlay(formData){
+        const res = await fetch('/chat/stream', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+        const reader = res.body.getReader();
+        const enc = new TextEncoder();
+        const dec = new TextDecoder();
+    
+        const boundary = 'wavchunk';
+        const boundaryLine = enc.encode(`--${boundary}`);
+        const headerTerm = enc.encode('\r\n\r\n');
+    
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // ensure audio starts (Safari/iOS) — this function is always called from a user gesture (stop/upload)
+        try { await audioCtx.resume(); } catch {}
+    
+        // schedule chunks back-to-back
+        let lastEnd = audioCtx.currentTime;
+    
+        async function playWavBytes(bytes){
+          const arrayBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+          const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+          const src = audioCtx.createBufferSource();
+          src.buffer = audioBuf;
+          src.connect(audioCtx.destination);
+          const startAt = Math.max(audioCtx.currentTime, lastEnd + 0.02);
+          src.start(startAt);
+          lastEnd = startAt + audioBuf.duration;
+        }
+    
+        // helper: find sequence in a Uint8Array
+        function indexOfSeq(hay, needle, from=0){
+          outer: for (let i = from; i <= hay.length - needle.length; i++){
+            for (let j = 0; j < needle.length; j++){
+              if (hay[i+j] !== needle[j]) continue outer;
+            }
+            return i;
+          }
+          return -1;
+        }
+    
+        // stream buffer
+        let buf = new Uint8Array(0);
+    
+        // read loop
+        while (true){
+          const { value, done } = await reader.read();
+          if (done) break;
+    
+          // append to buf
+          const nb = new Uint8Array(buf.length + value.length);
+          nb.set(buf, 0); nb.set(value, buf.length);
+          buf = nb;
+    
+          // extract as many complete parts as possible
+          while (true){
+            // find boundary start
+            let bIdx = indexOfSeq(buf, boundaryLine);
+            if (bIdx === -1){
+              // try discarding leading noise if buffer grows huge
+              if (buf.length > 2_000_000) buf = buf.slice(-256_000);
+              break;
+            }
+            // boundary must be followed by CRLF
+            const afterBoundary = bIdx + boundaryLine.length;
+            if (afterBoundary + 2 > buf.length) break; // need more data
+            // find header end
+            const hStart = afterBoundary + 2; // skip \r\n
+            const hEnd = indexOfSeq(buf, headerTerm, hStart);
+            if (hEnd === -1) break; // need more data
+    
+            // parse headers
+            const headersBytes = buf.slice(hStart, hEnd);
+            const headersText = dec.decode(headersBytes);
+            const isEnd = headersText.includes('--') || headersText.trim() === '';
+            if (isEnd){
+              // end of stream marker
+              buf = new Uint8Array(0);
+              break;
+            }
+            // content length (required)
+            const mLen = headersText.match(/Content-Length:\s*(\d+)/i);
+            const contentLength = mLen ? parseInt(mLen[1], 10) : null;
+            if (!contentLength){ 
+              // try to skip malformed header
+              buf = buf.slice(hEnd + headerTerm.length);
+              continue;
+            }
+    
+            // body start/end
+            const bodyStart = hEnd + headerTerm.length;
+            const bodyEnd = bodyStart + contentLength;
+            if (bodyEnd > buf.length) break; // need more data
+    
+            const body = buf.slice(bodyStart, bodyEnd);
+    
+            // advance buffer; optional trailing CRLF after body
+            let restStart = bodyEnd;
+            if (restStart + 2 <= buf.length && buf[restStart] === 13 && buf[restStart+1] === 10){
+              restStart += 2;
+            }
+            buf = buf.slice(restStart);
+    
+            // decide: JSON meta (user text) vs audio
+            const isJson = body.length && body[0] === 0x7B; // '{'
+            if (isJson){
+              try {
+                const meta = JSON.parse(dec.decode(body));
+                if (meta.user){
+                  // prepend the user text to history view immediately
+                  await refreshHistory();
+                  logMsg('User (ASR): ' + meta.user);
+                }
+              } catch {}
+            } else {
+              // play this WAV chunk
+              try {
+                await playWavBytes(body);
+              } catch (e) {
+                logMsg('Decode error: ' + e.message);
+              }
+            }
+          }
+        }
+    
+        // after stream ends, refresh history
+        await refreshHistory();
+      }
+    
+      // --- Recording controls ---
       recBtn.onclick = async () => {
         if (!recording) {
           await startRecording();
         } else {
-          await stopRecording();
+          await stopRecording(true); // stop and send
         }
       };
-
-      cancelBtn.onclick = () => {
-        if (mediaRecorder && recording) {
-          recording = false;
-          mediaRecorder.stop();
-          mediaRecorder.stream.getTracks().forEach(t => t.stop());
-          chunks = [];
-          partialText = "";
-          recStatus.textContent = 'Recording canceled – nothing sent.';
-          recBtn.textContent = 'Start Recording';
-          cancelBtn.style.display = 'none';
-          logMsg('Recording canceled – nothing sent.');
-          refreshHistory();
-        }
+    
+      cancelBtn.onclick = async () => {
+        if (!recording) return;
+        await stopRecording(false); // stop without sending
+        // clear local UI state
+        chunks = [];
+        partialText = "";
+        userPreview.src = '';
+        recStatus.textContent = 'Recording canceled – nothing sent.';
+        recBtn.textContent = 'Start Recording';
+        cancelBtn.style.display = 'none';
+        logMsg('Recording canceled – nothing sent.');
+        await refreshHistory();
       };
-
-      async function startRecording() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+      async function startRecording(){
+        try{
+          const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
           const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
           mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
           chunks = [];
@@ -264,69 +398,83 @@
           cancelBtn.style.display = 'inline-block';
           recStatus.textContent = 'Recording…';
           logMsg('Recording started');
-
+    
           mediaRecorder.ondataavailable = async (e) => {
             if (!e.data || !e.data.size) return;
             chunks.push(e.data);
-            try {
+            // partial ASR for live captions
+            try{
               const fd = new FormData();
               fd.append('file', e.data, 'chunk.webm');
-              const res = await fetch('/asr-chunk', { method: 'POST', body: fd });
-              if (res.ok) {
-                const data = await res.json();
-                if (data.partial) {
+              const r = await fetch('/asr-chunk', { method:'POST', body: fd });
+              if (r.ok){
+                const data = await r.json();
+                if (data.partial){
                   partialText = data.partial;
                   refreshHistory();
                 }
               }
-            } catch {}
+            }catch{}
           };
-
-          mediaRecorder.onstop = async () => {
-            if (!chunks.length) return;
-            const fullBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            userPreview.src = URL.createObjectURL(fullBlob);
-            recStatus.textContent = 'Processing…';
-            logMsg('Sending full audio to /chat/');
-
-            const fd = new FormData();
-            fd.append('file', fullBlob, 'full.webm');
-            const res = await fetch('/chat/', { method: 'POST', body: fd });
-            if (!res.ok) {
-              logMsg('Error: ' + await res.text());
-              recStatus.textContent = 'Error';
-              return;
-            }
-            const agentBlob = await res.blob();
-            const url = URL.createObjectURL(agentBlob);
-            agentAudio.src = url;
-            agentAudio.play().catch(()=>{});
-            recStatus.textContent = 'Idle';
-            logMsg('Agent reply played.');
-            partialText = "";
-            cancelBtn.style.display = 'none';
-            await refreshHistory();
-          };
-
-          mediaRecorder.start(750);
-        } catch (err) {
+    
+          mediaRecorder.start(750); // ms timeslice
+        }catch(err){
           logMsg('Mic error: ' + err.message);
         }
       }
-
-      async function stopRecording() {
+    
+      async function stopRecording(send){
         if (!mediaRecorder) return;
         recording = false;
         recBtn.textContent = 'Start Recording';
-        recStatus.textContent = 'Finishing…';
+        recStatus.textContent = send ? 'Processing…' : 'Idle';
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
         cancelBtn.style.display = 'none';
+    
+        if (!send) return;
+    
+        // Build a single blob of the whole utterance and stream it to server
+        const fullBlob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        userPreview.src = URL.createObjectURL(fullBlob);
+        logMsg('Sending full audio to /chat/stream…');
+    
+        const fd = new FormData();
+        fd.append('file', fullBlob, 'full.webm');
+    
+        try{
+          await sendStreamAndPlay(fd);
+          recStatus.textContent = 'Idle';
+          logMsg('Agent streaming reply finished.');
+          partialText = "";
+        }catch(e){
+          logMsg('Stream error: ' + e.message);
+          recStatus.textContent = 'Error';
+        }
       }
-
+    
+      // --- File upload: auto-send via streaming endpoint ---
+      fileInput.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        userPreview.src = URL.createObjectURL(file);
+        logMsg('Sending uploaded file to /chat/stream…');
+        const fd = new FormData();
+        fd.append('file', file, file.name || 'upload.webm');
+        try{
+          await sendStreamAndPlay(fd);
+          logMsg('Agent streaming reply finished (upload).');
+          await refreshHistory();
+        }catch(e){
+          logMsg('Stream error: ' + e.message);
+        }
+      };
+    
+      // Initial history
       await refreshHistory();
     })();
-  </script>
+    </script>
+    
 </body>
 </html>
 

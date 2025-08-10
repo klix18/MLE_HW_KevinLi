@@ -1,23 +1,18 @@
 # tts.py
-import subprocess
 import tempfile
 from pathlib import Path
+from TTS.api import TTS
+
+# Lightweight English model
+tts_model = TTS(model_name="tts_models/en/ljspeech/vits", progress_bar=False, gpu=False)
 
 def synthesize_speech(text: str) -> str:
     text = (text or "").strip() or "Hello, this is a test."
 
-    # 1) Generate AIFF using macOS 'say'
-    aiff_path = Path(tempfile.NamedTemporaryFile(delete=False, suffix=".aiff").name)
-    subprocess.run(["say", "-o", str(aiff_path), text], check=True)
-
-    # 2) Convert AIFF -> WAV using ffmpeg (installed for Whisper)
-    wav_path = aiff_path.with_suffix(".wav")
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(aiff_path), str(wav_path)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
+    wav_path = Path(tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name)
+    tts_model.tts_to_file(text=text, file_path=str(wav_path))
 
     return str(wav_path)
+
+
 
