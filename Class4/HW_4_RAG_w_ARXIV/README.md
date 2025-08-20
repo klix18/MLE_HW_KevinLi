@@ -6,8 +6,11 @@ It scrapes PDFs, extracts text, chunks content, embeds using SentenceTransformer
 
 HW_4_RAG_w_ARXIV/
 ├─ master_setup.py
+
 ├─ query.py
+
 ├─ step1_scrape.py
+
 ├─ step2_extract.py
 ├─ step3_chunk.py
 ├─ step4_embed.py
