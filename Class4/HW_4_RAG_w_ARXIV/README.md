@@ -3,6 +3,7 @@
 It scrapes PDFs, extracts text, chunks content, embeds using SentenceTransformers, builds a FAISS vector index, and finally queries with OpenAI’s GPT models.
 
 ## 📁 Project structure (key files)
+
 HW_4_RAG_w_ARXIV/
 ├─ master_setup.py
 ├─ query.py
