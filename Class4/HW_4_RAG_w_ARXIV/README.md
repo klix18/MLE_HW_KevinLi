@@ -4,8 +4,9 @@ It scrapes PDFs, extracts text, chunks content, embeds using SentenceTransformer
 
 ## 📁 Project structure (key files)
 
+```
 HW_4_RAG_w_ARXIV/
-├─ master_setup.py /n
+├─ master_setup.py
 ├─ query.py
 ├─ step1_scrape.py
 ├─ step2_extract.py
@@ -19,6 +20,7 @@ HW_4_RAG_w_ARXIV/
 ├─ id_mapping.json # FAISS id → (pdf, chunk_idx) mapping (created)
 ├─ faiss.index # FAISS vector index (created)
 └─ .env # your OpenAI API key (you create)
+```
 
 ## 📦 Requirements
 Make sure you have Python 3.9+ and virtualenv or venv set up.
