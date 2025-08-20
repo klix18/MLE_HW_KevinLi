@@ -1,0 +1,12 @@
+I may not be your typical Product Designer candidate, but here’s why you want me on your team.
+At NBCUniversal, I was hired to manually create, duplicate, and rename 300 images per movie. Instead, I reimagined the process from a user’s perspective. With no prior Airtable experience, I taught myself the platform and built a fully automated, intuitive workflow using Airtable automations, Photoshop scripts, and shell commands — cutting task time from one hour to ten minutes.
+For a large-scale NDA project with an urgent deadline of creating a functional workflow within 1 week, I applied the same principles — streamlining user flows, simplifying interfaces, and prioritizing clarity — and ultimately delivered 20,000+ assets in 30 days
+with a 1.5% error rate across 19 operators. The system enabled asynchronous, cross-team collaboration while maintaining data integrity and compliance. Most importantly, it was easy to use. Colleagues described it as:
+“Everything is pretty clear on my end.”
+“Thanks again for your excellent work... you’re great at explaining it all and writing up consistent instructions!!”
+“The training doc is extremely helpful... Makes it harder to forget any steps.”
+These testimonials reflect my design philosophy: create simple and enjoyable systems that reduce friction, make complex workflows feel effortless, and empower users to focus on the work that matters.
+Now, I’m expanding my skills into Agentic AI, training in fine- tuning, RAG, prompt engineering, MCP, and LangChain to
+create AI-powered tools that autonomously manage and optimize workflows. I thrive in cross-functional environments, collaborating with engineers, product managers, and stakeholders to translate requirements into simple, polished, and highly usable solutions.
+I’d welcome the chance to bring my passion for usability, my proven record in system design, and my drive for simplicity to your team at Whop — helping craft product experiences that set a new bar for excellence.
+Best, Kevin Li
