@@ -34,3 +34,33 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## 🚀 Running the Pipeline
+The workflow is orchestrated by master_setup.py.
+
+### Full Run (scrape, extract, chunk, embed, index)
+```
+python3 master_setup.py
+```
+
+### Skip Scraping (reuse downloaded PDFs)
+```
+python3 master_setup.py --skip-scrape
+```
+
+### Skip Other Steps
+```
+python3 master_setup.py --skip-scrape --skip-extract --skip-chunk --skip-embed --skip-faiss
+```
+
+## ❓ Querying the RAG System
+Once setup is complete, you can ask questions with query.py.
+
+```
+python3 query.py
+```
+Inside query.py, the default example is:
+```
+if __name__ == "__main__":
+    query_rag("What are the latest methods in machine translation?")
+```
+
