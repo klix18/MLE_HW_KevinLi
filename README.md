@@ -48,12 +48,28 @@ This repo contains my homework and notes for each week of the MLE course. Each w
 ---
 
 ### Week 3: 🧠 Pretraining Data Collection and Extraction
-- 📝 *[Record notes and code snippets]*
+- 🔬 **Main Learnings** 
+  - **Web scraping:** Used Trafilatura to scrape websites and output readable text - title, body, metadata...
+  - **OCR:** Used Tesseract to perform optical character recognition on images.
+  - **Audio Recognition:** Used Whisper to convert audio to text.
+  - **Data Cleaning:** Beautiful Soup - used to clean HTML noise to keep clean text. Datasketch (MinHash) - used to deduplicate near-duplicate texts.
+  - **Data Centric AI:** Garbage in, garbage out. Data is the soul of pretraining.
+
+- 📝 **Project Voice-Agent:** Voice interactive agent hosted through FastApi
+  - 📌 *Note:* Quick POC was created by using Fastapi. Model could be prompt-engineered better to yield better responses. The latency could be improved.
 
 ---
 
 ### Week 4: 🛠️ RAG
-- 📝 *[Record notes and code snippets]*
+- 🔬 **Main Learnings** 
+  - **LangChain RAG Pipeline:** Langchain offers preset classes that simplify the RAG process
+  - **OCR:** Used Tesseract to perform optical character recognition on images.
+  - **Audio Recognition:** Used Whisper to convert audio to text.
+  - **Data Cleaning:** Beautiful Soup - used to clean HTML noise to keep clean text. Datasketch (MinHash) - used to deduplicate near-duplicate texts.
+  - **Data Centric AI:** Garbage in, garbage out. Data is the soul of pretraining.
+
+- 📝 **HW_4_RAG_w_ARXIV:** Modular RAG Pipeline using cs.CL papers from Arxiv
+  - 📌 *Note:* I tested larger and smaller chunking sizes using uncleaned data. The larger chunking sizes yielded in responses that includes citation like information, like the author and publication names, where as the smaller chunking size yielded more summarized results. 
 
 ---
 
