@@ -1,0 +1,75 @@
+[
+    {
+        "query": "What are the latest methods in machine translation?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18791v1.pdf",
+          "pdfs/2508.18701v1.pdf"
+        ]
+    },
+    {
+      "query": "How is contrastive learning used in natural language processing?",
+      "relevant_doc_paths": [
+        "pdfs/2508.18819v1.pdf",
+        "pdfs/2508.18687v1.pdf"
+      ]
+    },
+    {
+        "query": "What approaches exist for multilingual language models?",
+        "relevant_doc_paths": [
+          "pdfs/2508.19089v1.pdf",
+          "pdfs/2508.18976v1.pdf"
+        ]
+      },
+      {
+        "query": "What are recent improvements in text summarization models?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18646v1.pdf",
+          "pdfs/2508.19221v1.pdf"
+        ]
+      },
+      {
+        "query": "What datasets are used for dialogue systems?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18715v1.pdf",
+          "pdfs/2508.19077v1.pdf"
+        ]
+      },
+      {
+        "query": "How do large language models handle reasoning tasks?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18646v1.pdf",
+          "pdfs/2508.18743v1.pdf",
+          "pdfs/2508.18760v1.pdf"
+        ]
+      },
+      {
+        "query": "What methods improve factuality in text generation?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18646v1.pdf",
+          "pdfs/2508.19221v1.pdf",
+          "pdfs/2508.18780v1.pdf"
+        ]
+      },
+      {
+        "query": "What techniques are used for low-resource machine translation?",
+        "relevant_doc_paths": [
+          "pdfs/2508.19089v1.pdf",
+          "pdfs/2508.18701v1.pdf"
+        ]
+      },
+      {
+        "query": "What benchmarks are commonly used to evaluate NLP models?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18646v1.pdf",
+          "pdfs/2508.18652v1.pdf"
+        ]
+      },
+      {
+        "query": "What are recent approaches for multimodal NLP models?",
+        "relevant_doc_paths": [
+          "pdfs/2508.18740v1.pdf",
+          "pdfs/2508.18976v1.pdf"
+        ]
+      }
+  ]
+  

@@ -1,0 +1,10 @@
+requests
+arxiv
+PyMuPDF
+pytesseract
+Pillow
+sentence-transformers
+faiss-cpu
+numpy
+openai
+tqdm
